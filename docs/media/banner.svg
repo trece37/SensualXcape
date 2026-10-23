@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="500" viewBox="0 0 1440 500" role="img" aria-labelledby="title desc">
+  <title id="title">SensualXcape · Tu espacio, a tu manera</title>
+  <desc id="desc">Portada con cristales translúcidos y luces rosa, violeta y rojo sobre negro.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#17101f"/><stop offset="1" stop-color="#08090d"/></linearGradient>
+    <linearGradient id="line"><stop stop-color="#f692bb"/><stop offset=".52" stop-color="#a78bfa"/><stop offset="1" stop-color="#ed4057"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#ad235d" stop-opacity=".4"/><stop offset="1" stop-color="#ad235d" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1440" height="500" rx="28" fill="url(#bg)"/>
+  <ellipse cx="220" cy="180" rx="480" ry="380" fill="url(#glow)"/>
+  <ellipse cx="1210" cy="390" rx="450" ry="340" fill="url(#glow)"/>
+  <g fill="#fff" fill-opacity=".035" stroke="#fff" stroke-opacity=".13">
+    <rect x="990" y="48" width="304" height="370" rx="44" transform="rotate(12 1142 233)"/>
+    <rect x="944" y="76" width="304" height="370" rx="44" transform="rotate(-8 1096 261)"/>
+  </g>
+  <path d="M1043 264c-80-48-26-126 29-77 55-49 109 29 29 77l-29 20z" fill="none" stroke="url(#line)" stroke-width="4"/>
+  <path d="m1178 142 7 18 18 7-18 7-7 18-7-18-18-7 18-7z" fill="#e9c6ff"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="88" y="108" fill="#eab7d2" font-size="17" letter-spacing="5">AUTONOMÍA · COMUNIDAD · UTILIDAD</text>
+    <text x="83" y="228" fill="#fff7fb" font-size="88" font-weight="700" letter-spacing="-3">SensualXcape</text>
+    <text x="88" y="286" fill="#d3c6d9" font-size="30">Tu espacio, a tu manera.</text>
+    <rect x="88" y="344" width="685" height="1" fill="url(#line)"/>
+    <text x="88" y="397" fill="#e4c1d4" font-size="18">V1.1</text>
+    <text x="170" y="397" fill="#b9a9c9" font-size="18">Rosa</text>
+    <text x="265" y="397" fill="#c7b5ff" font-size="18">Neón</text>
+    <text x="365" y="397" fill="#ff8494" font-size="18">Noir</text>
+    <text x="505" y="397" fill="#d5ceda" font-size="18">Una web pensada para móvil</text>
+  </g>
+</svg>

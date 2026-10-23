@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#231721">
+  <meta name="description" content="SensualXcape: tu espacio para decidir con quién conversar.">
+  <title>SensualXcape | Tu espacio</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div id="app-layout" class="layout">
+    <header class="topbar">
+      <div class="brand"><div class="mark" aria-hidden="true">SX</div><div><strong>Sensual<span class="brand-x">X</span>cape</strong><small>TU ESPACIO</small></div></div>
+      <span class="lab">Ensayo privado</span>
+    </header>
+    <main>
+      <section class="intro">
+        <span class="eyebrow">LA PUERTA SE ABRE DESDE DENTRO</span>
+        <h1>Tu espacio.<br><em>Tus decisiones.</em></h1>
+        <p>Recibe una solicitud, elige si quieres conversar y detén el contacto cuando lo decidas. Sin compartir tu teléfono.</p>
+      </section>
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <section id="auth-panel" class="panel auth-panel" aria-labelledby="auth-title">
+        <div class="panel-heading"><div><span class="eyebrow">PASO 01</span><h2 id="auth-title">Entra en tu conversación</h2></div><span class="mini-label">Acceso personal</span></div>
+        <p class="access-intro">Si ya tienes una cuenta, entra aquí. No necesitas volver a crearla ni esperar otro correo.</p>
+        <form id="auth-form" autocomplete="on">
+          <label for="email">Tu correo electrónico</label>
+          <input type="email" id="email" name="email" autocomplete="email" placeholder="tu-correo@ejemplo.com" required>
+          <label for="password">Contraseña de Connect</label>
+          <div class="password-row"><input type="password" id="password" name="password" autocomplete="current-password" placeholder="La contraseña de esta aplicación" required><button id="show-password" class="secondary small" type="button" aria-controls="password" aria-pressed="false">Mostrar</button></div>
+          <p class="help">Usa la contraseña que creaste en Connect o la que recibiste para el ensayo. No tiene por qué coincidir con la de tu correo.</p>
+          <button id="login-btn" class="primary" type="submit">Entrar</button>
+          <button id="recover-btn" class="text-button" type="button">He olvidado mi contraseña</button>
+        </form>
+        <details class="access-help"><summary>¿Es tu primera vez o no puedes entrar?</summary><p>Walker y Manel ya tienen sus accesos preparados. Si participas en ese ensayo, usa <strong>Entrar</strong>.</p><p>Si necesitas una cuenta nueva, escribe arriba tu correo y una contraseña de al menos 6 caracteres; después pulsa el botón de abajo. El registro no te añade a ninguna conversación.</p><button id="signup-btn" class="secondary" type="button">Crear una cuenta nueva</button><p class="help">El envío de correos de este laboratorio es limitado. Si un correo no llega, revisa spam y evita repetir la solicitud. Un enlace antiguo que termine en localhost no sirve: vuelve a esta página.</p></details>
+      </section>
+      <section id="recovery-panel" class="panel auth-panel" aria-labelledby="recovery-title" hidden>
+        <h2 id="recovery-title">Elige una nueva contraseña</h2><p id="recovery-email" class="identity"></p>
+        <form id="recovery-form"><label for="new-password">Nueva contraseña de Connect</label><input id="new-password" type="password" autocomplete="new-password" minlength="6" required><label for="repeat-password">Repite la nueva contraseña</label><input id="repeat-password" type="password" autocomplete="new-password" minlength="6" required><button id="save-password" class="primary" type="submit">Guardar contraseña</button></form>
+        <button id="cancel-recovery" class="text-button" type="button">Volver al acceso</button>
+      </section>
+      <section id="chat-panel" class="panel chat-panel" aria-label="Mensajería" hidden>
+        <div class="panel-heading"><div><span class="eyebrow">TÚ DECIDES</span><h2>Tu espacio</h2><p id="identity" class="identity"></p></div><div class="workspace-actions"><button id="easy-mode" class="secondary small" type="button" aria-pressed="false" aria-controls="easy-help legacy-room-options">Modo fácil: desactivado</button><button type="button" id="logout-btn" class="text-button">Cerrar sesión</button></div></div>
+        <p id="easy-help" class="easy-help" hidden>1. Comparte tu invitación si quieres recibir solicitudes. 2. Acepta solo cuando quieras conversar. 3. Puedes bloquear un contacto cuando lo necesites.</p>
+        <section class="contacts-space" aria-labelledby="contacts-title">
+          <div class="section-heading"><h3 id="contacts-title">Tus contactos</h3><button id="refresh-contacts" type="button" class="text-button">Actualizar contactos</button></div>
+          <p id="contacts-status" class="help" role="status" aria-live="polite">Cargando tu espacio…</p>
+          <ul id="contacts-list" class="contacts-list" aria-label="Solicitudes y conversaciones"></ul>
+          <details class="invitation-tools"><summary>Invitar o pedir una conversación</summary>
+            <label for="contact-label">Cómo quieres que te conozcan</label><input id="contact-label" maxlength="50" autocomplete="off" placeholder="Un nombre o seudónimo"><p class="help">Este nombre lo verá la otra persona. Tu correo no aparece en la solicitud.</p>
+            <div class="invitation-card"><h4>Recibir solicitudes</h4><p>Compartir tu código permite pedirte una conversación. Tú eliges si se abre.</p><button id="create-invite" type="button" class="secondary">Preparar mi invitación</button><div id="invite-result" hidden><label for="invite-code">Tu código de invitación</label><input id="invite-code" readonly><button id="copy-invite" type="button" class="text-button">Copiar invitación</button></div></div>
+            <form id="request-contact-form" class="invitation-card"><h4>Tengo una invitación</h4><label for="contact-code">Código que te han compartido</label><input id="contact-code" autocomplete="off" placeholder="Pega el código de invitación" required><p class="help">Tu solicitud no abre la conversación. La otra persona decide.</p><button id="request-contact" type="submit" class="primary">Pedir conversación</button></form>
+          </details>
+          <p class="help contact-boundary">Bloquear detiene los mensajes nuevos. El historial se conserva para ambas cuentas. Las notificaciones con la app cerrada todavía no están disponibles.</p>
+        </section>
+        <details id="legacy-room-options" class="legacy-options"><summary>Prueba anterior: salas por código</summary><p class="help">Estas salas pertenecen al ensayo inicial. En el recorrido nuevo se entra por una solicitud aceptada.</p>
+        <div id="setup-room" class="room-setup">
+          <p>Puedes recuperar una sala del ensayo anterior si tu cuenta ya pertenecía a ella. Las conversaciones nuevas se abren desde una solicitud aceptada.</p><button id="retry-room" class="secondary" type="button">Buscar mi conversación anterior</button>
+          <button type="button" id="create-room" class="primary" hidden disabled>Crear conversación anterior</button>
+          <form id="join-form" class="join"><label for="room-id">Código de una sala a la que ya perteneces</label><div class="input-row"><input id="room-id" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" required><button type="submit" class="secondary">Abrir sala anterior</button></div></form>
+        </div></details>
+        <div id="active-chat" hidden>
+          <div class="section-heading active-contact"><h3 id="active-contact-title">Tu conversación</h3><button id="active-block" class="secondary small" type="button" hidden>Bloquear</button></div><p id="active-contact-status" class="help" role="status" aria-live="polite"></p>
+          <div class="room-bar"><div><span class="eyebrow">SALA PRIVADA</span><p id="room-code" class="room-code"></p></div><div class="room-actions"><button type="button" id="copy-code" class="secondary small">Copiar código</button><button type="button" id="leave-room" class="text-button">Cambiar sala</button></div></div>
+          <div id="connection-status" class="connection-status" role="status" aria-live="polite">Conectando…</div>
+          <ol id="messages" class="messages" aria-label="Mensajes de esta conversación"><li class="empty">Todavía no hay mensajes. Escribe el primero.</li></ol>
+          <button id="refresh-messages" class="text-button" type="button">Actualizar mensajes</button>
+          <form id="send-form" class="composer"><label class="sr-only" for="body">Escribe un mensaje</label><input id="body" maxlength="2000" autocomplete="off" placeholder="Escribe un mensaje…" required><button type="submit" class="primary">Enviar</button></form>
+          <p id="send-status" class="help" role="status" aria-live="polite"></p>
+          <p class="help bottom-note">Mostramos los últimos 150 mensajes, del más antiguo al más reciente. El historial anterior sigue guardado, pero este laboratorio todavía no permite consultarlo. Las notificaciones con la app cerrada todavía no están implementadas.</p>
+        </div>
+      </section>
+    </main>
+    <footer>SensualXcape · Ensayo privado con datos de prueba.</footer>
+  </div>
+</body>
+</html>

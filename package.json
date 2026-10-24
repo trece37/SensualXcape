@@ -6,7 +6,9 @@
     "pretest": "npm run build:cofre",
     "test": "node --test tests/*.test.mjs",
     "build:demo": "node scripts/build-demo.mjs",
+    "build:pages": "node scripts/build-pages.mjs",
     "preview:demo": "node scripts/preview-demo.mjs",
+    "preview:pages": "node scripts/preview-demo.mjs --pages",
     "build": "node scripts/build.mjs",
     "local:qa": "node scripts/build-cofre.mjs && node scripts/local-qa-server.mjs",
     "build:cofre": "node scripts/build-cofre.mjs"

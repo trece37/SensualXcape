@@ -49,10 +49,10 @@ export function mountDemo({ documentRef = document, windowRef = window } = {}) {
   function renderContacts() {
     $('contacts-list').replaceChildren();
     for (const contact of contacts) {
-      const card = el('li', 'contact-card'), actions = el('div', 'contact-actions');
+      const card = el('li', 'contact-card'), actions = el('div', 'contact-actions');card.dataset.contactId=contact.id;card.dataset.contactStatus=contact.status;
       card.append(el('h4', '', contact.name), el('p', 'contact-state', contact.blocked ? 'Bloqueado en esta demo' : { pending: 'Solicitud ficticia por decidir', accepted: 'Conversación de muestra aceptada', rejected: 'Solicitud rechazada en esta demo' }[contact.status]));
       if (contact.status === 'pending' && !contact.blocked) {
-        actions.append(button('Aceptar ejemplo', () => { contact.status = 'accepted'; histories.set(contact.id, [{ mine: false, body: 'Has aceptado esta solicitud ficticia. Ahora puedes probar la conversación.' }]); renderContacts(); openConversation(contact); }, 'primary small'), button('Rechazar ejemplo', () => { contact.status = 'rejected'; $('demo-contacts-status').textContent = 'Solicitud ficticia rechazada. No se ha abierto una conversación.'; renderContacts(); }));
+        actions.append(button('Aceptar ejemplo', () => { contact.status = 'accepted'; histories.set(contact.id, [{ mine: false, body: 'Has aceptado esta solicitud ficticia. Ahora puedes probar la conversación.' }]); renderContacts(); openConversation(contact);d.dispatchEvent(new w.CustomEvent('sx:contact-accepted',{detail:{contactId:contact.id,name:contact.name}})); }, 'primary small'), button('Rechazar ejemplo', () => { contact.status = 'rejected'; $('demo-contacts-status').textContent = 'Solicitud ficticia rechazada. No se ha abierto una conversación.'; renderContacts(); }));
       }
       if (contact.status === 'accepted') actions.append(button(contact.blocked ? 'Ver historial' : 'Abrir conversación', () => openConversation(contact), contact.blocked ? 'secondary small' : 'primary small'));
       actions.append(button(contact.blocked ? 'Desbloquear ejemplo' : 'Bloquear ejemplo', () => { contact.blocked = !contact.blocked; renderContacts(); if (active === contact) syncConversation(); }));
@@ -80,7 +80,7 @@ export function mountDemo({ documentRef = document, windowRef = window } = {}) {
   listen($('leave-room'), 'click', () => { if (active) draft.set(active.id, $('body').value); active = null; $('active-chat').hidden = true; $('chat-panel').setAttribute('data-conversation-open', 'false'); $('contacts-title').focus({ preventScroll: true }); $('contacts-title').scrollIntoView?.({ block: 'start', behavior: 'instant' }); });
   listen($('active-block'), 'click', () => { if (!active) return; active.blocked = !active.blocked; syncConversation(); renderContacts(); });
   listen($('body'), 'input', () => { if (active) draft.set(active.id, $('body').value); });
-  listen($('send-form'), 'submit', event => { event.preventDefault(); const text = $('body').value.trim(); if (!active || active.blocked || !text) return; histories.get(active.id).push({ mine: true, body: text.slice(0, 2000) }); $('body').value = ''; draft.set(active.id, ''); renderMessages(); $('send-status').textContent = 'Ejemplo añadido solo a esta página. No se ha enviado ni entregado a nadie.'; $('body').focus(); });
+  listen($('send-form'), 'submit', event => { event.preventDefault(); const text = $('body').value.trim(); if (!active || active.blocked || !text) return; histories.get(active.id).push({ mine: true, body: text.slice(0, 2000) }); $('body').value = ''; draft.set(active.id, ''); renderMessages(); $('send-status').textContent = 'Ejemplo añadido solo a esta página. No se ha enviado ni entregado a nadie.';d.dispatchEvent(new w.CustomEvent('sx:demo-message-added',{detail:{contactId:active.id}})); $('body').focus(); });
   resetContacts();
 
   let fileSequence = 2, previewTrigger = null;

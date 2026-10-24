@@ -1,11 +1,11 @@
-# Desarrollar y probar SensualXcape V1.1
+# Desarrollar y probar SensualXcape
 
 ## Dos entornos con un alcance distinto
 
 | | Demo de GitHub Pages | Laboratorio local |
 | --- | --- | --- |
 | Entrada | `demo/index.html` | `index.html`, adaptado por el servidor de ensayo |
-| Preparación | `npm run build:demo` → `dist/` | `npm run local:qa` prepara los bundles y arranca el servidor |
+| Preparación | `npm run build:pages` → `dist-pages/` con V1 y V2 | `npm run local:qa` prepara los bundles y arranca el servidor |
 | Cuentas | Sin cuenta | A, B y C ficticias; indicaciones en pantalla |
 | Mensajes y contactos | Ejemplos en memoria de la página | Solicitud, decisión, conversación y bloqueo con permisos en base local |
 | Cofre y comunidad | Muestras que se borran al recargar | Datos locales de prueba; pueden conservarse en este equipo |
@@ -31,11 +31,20 @@ El laboratorio funcional se inicia con `npm run local:qa` en http://127.0.0.1:43
 
 ## Publicación de la demo
 
-El workflow `.github/workflows/pages.yml` instala las dependencias del lockfile, ejecuta las pruebas, construye `dist/` y publica ese artefacto en GitHub Pages desde `main`. En pull requests solo comprueba y construye.
+El workflow `.github/workflows/pages.yml` instala las dependencias del lockfile, ejecuta las pruebas, construye `dist-pages/` mediante `npm run build:pages` y publica ese artefacto en GitHub Pages desde `main`. En pull requests solo comprueba y construye.
 
-El sitio publica `index.html`, `demo.js`, `demo.css` y el recurso gráfico del portal. El SDK, la configuración del laboratorio y las fuentes del servidor no forman parte del sitio. `scripts/build-demo.mjs` aplica un adaptador explícito al shell común; si cambia el código esperado, el build se detiene para exigir revisión del adaptador.
+La raíz conserva la V1 del commit `1a645827aa5c5b92b998a5373810bdfd3a4dbfbb`, congelada en `versions/v1/site/` y verificada por SHA-256. La V2 se construye en `dist-pages/v2/`. Sólo se publican HTML, bundles y recursos gráficos expresamente admitidos. El SDK, la configuración del laboratorio y las fuentes del servidor no forman parte del sitio. `scripts/build-demo.mjs` aplica un adaptador explícito al shell común; si cambia el código esperado, el build se detiene para exigir revisión del adaptador.
 
-En **Settings → Pages**, la fuente debe ser **GitHub Actions**. El enlace de la demo es https://trece37.github.io/SensualXcape/.
+En **Settings → Pages**, la fuente debe ser **GitHub Actions**. V1 mantiene https://trece37.github.io/SensualXcape/; la ruta preparada para V2 es https://trece37.github.io/SensualXcape/v2/. Comprobar el despliegue antes de dar la nueva URL por disponible.
+
+Para verificar ambas rutas en local:
+
+```sh
+npm run build:pages
+npm run preview:pages
+```
+
+El preview sirve V1 en http://127.0.0.1:4349/SensualXcape/ y V2 en http://127.0.0.1:4349/SensualXcape/v2/. `npm run build:demo` continúa construyendo sólo la interfaz actual en `dist/` para revisión individual.
 
 ## Comandos que pertenecen al laboratorio
 

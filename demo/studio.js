@@ -3,6 +3,7 @@ import { House, UserRound, UsersRound, Vault, HeartHandshake, Sparkles, ShieldCh
 import { createProfileView } from './profile-studio.js';
 import { createCofreView } from './cofre-studio.js';
 import { SERVICE_GUIDES, createGuideView } from './guide-studio.js';
+import { mountEffects } from './effects/experience.js';
 
 const ART = './assets/v2/';
 import { STUDIO_NOTICES } from './notices-studio.js';
@@ -11,7 +12,7 @@ export { STUDIO_NOTICES };
 export function mountStudio({ platform, documentRef = document, windowRef = window } = {}) {
   if (!platform || documentRef.getElementById('sx-studio-footer')) return null;
   const d = documentRef, w = windowRef, cleanups = [], main = d.getElementById('v11-workspace');
-  let entered = false, adult = false, sharedProfile = null, pendingRoute = 'home', disposed = false;
+  let entered = false, adult = false, sharedProfile = null, pendingRoute = 'home', disposed = false, visualEffects;
   const el = (tag, cls, text) => { const node = d.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
   const on = (node, type, fn) => { node.addEventListener(type, fn); cleanups.push(() => node.removeEventListener(type, fn)); };
   const icon = (data, cls = '') => { const svg = d.createElementNS('http://www.w3.org/2000/svg', 'svg'); for (const [key, value] of Object.entries({ viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', 'stroke-width':'1.6', 'stroke-linecap':'round', 'stroke-linejoin':'round', 'aria-hidden':'true', class:`sx-icon ${cls}` })) svg.setAttribute(key,value); for (const [tag, attrs] of data) { const child = d.createElementNS(svg.namespaceURI,tag); for (const [key,value] of Object.entries(attrs)) child.setAttribute(key,value); svg.append(child); } return svg; };
@@ -41,7 +42,7 @@ export function mountStudio({ platform, documentRef = document, windowRef = wind
   const publicBar=el('header','sx-public-header'); const brand=button('',()=>platform.navigate('welcome'),'sx-brand-button'); brand.append(mark());
   const publicActions=el('div','sx-public-actions');const helpLink=helpButton('Cómo funciona SensualXcape',()=>platform.navigate('guide'));helpLink.classList.add('sx-header-guide');publicActions.append(helpLink,go('Entrar','professional','sx-text-link'),smallInfo('privacy','Privacidad'));
   publicBar.append(brand,publicActions); main.before(publicBar);
-  const banner=d.querySelector('.demo-banner'); if(banner) { banner.textContent='Vista de prueba · cambios solo en esta pestaña'; banner.append(smallInfo('privacy','Sobre esta prueba')); }
+  const banner=d.querySelector('.demo-banner'); if(banner) { banner.textContent='SensualXcape V2 · vista de prueba · cambios solo en esta pestaña'; banner.append(smallInfo('privacy','Sobre esta prueba')); }
 
   const welcome=el('section','sx-welcome');
   const welcomeHero=el('div','sx-landing-hero'); const heroArt=image('portal','','sx-hero-image'); heroArt.loading='eager'; heroArt.fetchPriority='high';
@@ -104,6 +105,9 @@ export function mountStudio({ platform, documentRef = document, windowRef = wind
 
   const dashboard=el('section','sx-dashboard'); dashboard.append(heading('BIENVENIDA A TU ESPACIO','Hoy, a tu manera.','Tu perfil, tus conversaciones y tus cosas. Elige por dónde empezar.'));
   const profileFeature=el('div','sx-profile-feature sx-glass');profileFeature.append(icon(UserRound),el('div',''));profileFeature.lastChild.append(el('p','sx-eyebrow','EMPIEZA POR TI'),el('h3','','Tu perfil merece tu tiempo.'),el('p','','Prepara las fotos, guarda un borrador y decide qué quieres compartir.'));profileFeature.append(go('Preparar mi perfil','profile','sx-button sx-primary'));dashboard.append(profileFeature);
+  const shelf=el('details','sx-shelf-panel'),shelfTitle=el('summary','','Tus espacios, a mano');shelf.append(shelfTitle,el('p','sx-shelf-description','Desliza o elige un espacio. El catálogo completo sigue debajo.'));
+  const shelfTrack=el('div','sx-shelf-track');shelfTrack.setAttribute('aria-label','Accesos con profundidad');
+  for(const[label,route,description,art]of[['Mensajes','messages','Conversaciones que eliges.',MessagesSquare],['Mi Cofre','cofre','Tus notas y archivos.',Vault],['Forocromos','community','Un espacio entre compañeras.',UsersRound]]){const card=go('',route,'sx-shelf-card',art);card.append(el('strong','',label),el('small','',description));shelfTrack.append(card);}shelf.append(shelfTrack);dashboard.append(shelf);
   const dashGrid=el('div','sx-dashboard-grid'); for(const [route,title,text,art,num,asset]of serviceData.slice(1)){const card=button('',()=>platform.navigate(route),'sx-dashboard-card');if(asset)card.append(image(asset,'',''));card.append(icon(art),el('h3','',title),el('p','',text),el('span','sx-quiet','Abrir espacio →'));dashGrid.append(card);}dashboard.append(dashGrid);
   const dashExtras=el('div','sx-extras');for(const [text,route,art]of[['Mis límites','trust',ShieldCheck],['Preferencias','settings',Settings2],['Tu voz cuenta','feedback',MessageSquarePlus],['Planes y herramientas','plans',Gem]])dashExtras.append(go(text,route,'sx-extra-link',art));dashboard.append(dashExtras);platform.registerPage('home',dashboard,{title:'Mi espacio'});
 
@@ -124,12 +128,13 @@ export function mountStudio({ platform, documentRef = document, windowRef = wind
 
   const settings=el('section','sx-settings');settings.append(heading('A TU MANERA','La misma casa, tu atmósfera.','Cambia el aspecto y el modo de lectura. Tus permisos no cambian con el color.'));
   const themeGrid=el('div','sx-theme-grid');for(const[value,title,text]of[['noir','Noir','Negro, rojo y blanco. La atmósfera principal.'],['rose','Rosa','Luz suave, blanco cálido y rosa.'],['neon','Fucsia','Gráfica más directa y acentos vibrantes.']]){const b=button('',()=>{platform.setTheme(value);notify(`Atmósfera ${title} aplicada.`);},`sx-theme-choice sx-theme-${value}`);b.append(el('span','sx-theme-swatch'),el('h3','',title),el('p','',text));themeGrid.append(b);}settings.append(themeGrid);
-  const easy=el('label','sx-preference sx-glass');const easyInput=el('input');easyInput.type='checkbox';easyInput.id='sx-easy-mode';easy.append(easyInput,el('span','','Modo fácil · más espacio y menos adornos'));on(easyInput,'change',()=>{d.body.classList.toggle('sx-easy',easyInput.checked);notify(easyInput.checked?'Modo fácil activado.':'Modo habitual activado.');});settings.append(easy);
+  const easy=el('label','sx-preference sx-glass');const easyInput=el('input');easyInput.type='checkbox';easyInput.id='sx-easy-mode';easy.append(easyInput,el('span','','Modo fácil · más espacio y menos adornos'));on(easyInput,'change',()=>{d.body.classList.toggle('sx-easy',easyInput.checked);visualEffects?.refresh();notify(easyInput.checked?'Modo fácil activado.':'Modo habitual activado.');});settings.append(easy);
   const optional=el('label','sx-preference sx-glass');const optionalInput=el('input');optionalInput.type='checkbox';optionalInput.id='sx-feedback-choice';optional.append(optionalInput,el('span','','Ensayar mi preferencia para sugerencias voluntarias'));on(optionalInput,'change',()=>notify(optionalInput.checked?'Elección de prueba activada. No se recoge ni envía información.':'Elección de prueba retirada.'));settings.append(optional,smallInfo('algorithm','Datos y mejora de las herramientas'),smallInfo('privacy','Privacidad de esta prueba'));
     const deleteAll=button('Borrar mis datos de prueba',async()=>{if(await confirmAction({title:'¿Vaciar tus aportaciones de esta prueba?',description:'Se quitarán tu perfil, su vista compartida, archivos, notas, textos de prueba y elecciones de esta pestaña. Se recargará la demo para limpiar también las conversaciones y otros borradores. No se borran originales o descargas del dispositivo.',confirmLabel:'Borrar datos de prueba'})){profile.reset();cofre.reset();sharedProfile=null;renderVisitors();optionalInput.checked=false;easyInput.checked=false;d.body.classList.remove('sx-easy');entered=false;platform.setTheme('noir');platform.navigate('welcome');w.location.reload();}},'sx-button sx-danger');settings.append(el('hr'),deleteAll,smallInfo('deletion','Qué se elimina y qué permanece'));platform.registerPage('settings',settings,{title:'Preferencias'});
 
   const footer=el('footer','sx-footer');footer.id='sx-studio-footer';footer.append(mark(),el('p','','Tu espacio. Tus decisiones.'),helpButton('Cómo funciona SensualXcape',()=>platform.navigate('guide')));
   const footerLinks=el('nav','sx-footer-links');footerLinks.setAttribute('aria-label','Información y privacidad');for(const[key,text]of[['legal','Aviso legal'],['privacy','Privacidad'],['terms','Condiciones'],['cookies','Cookies y preferencias'],['deletion','Borrado y decisiones'],['algorithm','Datos e IA']])footerLinks.append(button(text,()=>showInfo(key),'sx-text-link'));footer.append(footerLinks,el('small','','SensualXcape · maqueta en desarrollo · sin servicios remotos conectados'));d.getElementById('v11-shell').append(footer);
+  const versionLink=el('a','sx-version-link','SensualXcape V1 · abrir la versión anterior');const v2Path=w.location.pathname.match(/^(.*\/)v2(?:\/|$)/);versionLink.href=v2Path?v2Path[1]:'https://trece37.github.io/SensualXcape/';footer.append(versionLink);
   const signOut=button('Salir de la demo',()=>{entered=false;platform.navigate('welcome');notify('Has salido del espacio de prueba. Recargar limpia las aportaciones de la pestaña.');},'sx-session-exit',LogOut);signOut.setAttribute('aria-label','Salir de la demo');d.querySelector('.v11-topbar-actions')?.append(signOut);
   const privateRoutes=new Set(['home','profile','messages','cofre','community','care','trust','auralink','feedback','plans','settings']);
   platform.setRouteGuard(destination=>{if(destination==='access')return entered?'profile':'professional';if(privateRoutes.has(destination)&&!entered){pendingRoute=destination;return 'professional';}return destination;});
@@ -145,7 +150,8 @@ export function mountStudio({ platform, documentRef = document, windowRef = wind
   on(age,'cancel',event=>event.preventDefault());
   function showAgeAgain(){if(disposed)return;d.body.append(age);age.replaceChildren(mark(),el('h2','','Solo para personas adultas'),el('p','','Para continuar, declara que tienes 18 años o más.'),ageEnter,ageExit);age.showModal();}
   if(!adult)age.showModal();
+  visualEffects=mountEffects({documentRef:d,windowRef:w,platform,settings});
   return { get entered(){return entered;}, get sharedProfile(){return sharedProfile;}, showInfo, confirmAction,
-    destroy(){disposed=true;w.clearTimeout(toastTimer);profile.destroy();cofre.destroy();closeDialog(false);cleanups.splice(0).forEach(fn=>fn());platform.setRouteGuard(null);for(const node of [dialog,age,toast,footer,publicBar,signOut])node.remove();d.body.classList.remove('sx-studio','sx-public','sx-visitor-mode','sx-easy');}
+    destroy(){disposed=true;visualEffects?.destroy();w.clearTimeout(toastTimer);profile.destroy();cofre.destroy();closeDialog(false);cleanups.splice(0).forEach(fn=>fn());platform.setRouteGuard(null);for(const node of [dialog,age,toast,footer,publicBar,signOut])node.remove();d.body.classList.remove('sx-studio','sx-public','sx-visitor-mode','sx-easy');}
   };
 }

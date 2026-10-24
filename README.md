@@ -29,19 +29,19 @@ Esta V1.1 reúne su identidad visual y sus recorridos en una web adaptable. En e
 
 > **Prueba sin cuenta.** Todos los contactos, conversaciones, archivos y temas de comunidad de la demo son inventados. Sus cambios viven solo en memoria y desaparecen al recargar. No envía mensajes, no cobra ni avisa a nadie.
 
-## Estudio Noir · candidato local en revisión
+## V2 · Estudio Noir y efectos
 
 El candidato del **23/10/2026** amplía la experiencia con una entrada para personas adultas, dos caminos —área profesional y visitantes—, un perfil con fotos y un Cofre que permite trabajar con notas y archivos de prueba. Noir es el estilo principal; Rosa y Fucsia conservan las otras dos atmósferas. Cada espacio incluye una guía «Cómo funciona» y avisos en lenguaje cotidiano.
 
-**El aspecto actual sigue en revisión.** Walker indicó que no le gusta cómo ha quedado y que debe acercarse a las imágenes aprobadas de portada y acceso profesional, conservando el unicornio y su presencia visual. Se está iterando sobre esa corrección; los iconos específicos se diseñarán después. Este candidato no tiene aceptación visual.
+El **24/10/2026** se incorporaron las correcciones de la maqueta y la dirección de efectos aprobada: imágenes integradas con el fondo, servicios compactos, ayuda discreta, reflejos y respuestas breves. El humo queda en las ilustraciones de entrada y en el Cofre. El Cofre se abre al tocarlo o mantener pulsado; sus objetos representan las mismas notas y archivos que aparecen en la lista. Moverlos o recogerlos no elimina su contenido.
 
-**Todavía no se ha publicado.** El repositorio remoto y la demo de GitHub Pages enlazada arriba siguen en V1.1. La revisión local del candidato está en [127.0.0.1:4347/SensualXcape/](http://127.0.0.1:4347/SensualXcape/), mientras esté iniciado su servidor de previsualización.
+**Se mantienen dos versiones.** La V1.1 original conserva la raíz de GitHub Pages. La V2 se prepara bajo `/SensualXcape/v2/`; su publicación está pendiente de resolver el acceso de escritura a GitHub. El build comprueba que los cinco archivos de la V1 conservan exactamente sus huellas originales. Estado y comprobaciones: [V2 · implementación y verificación](docs/V2_20261024.md).
 
 El perfil, las fotos y el Cofre funcionan en la pestaña: permiten probar acciones reales del navegador, sin guardar tus aportaciones después de recargar. La entrada no autentica cuentas; los mensajes, la comunidad y los avisos siguen siendo simulaciones, y AuraLink no tiene generación de IA conectada.
 
-Antes de este refinamiento visual se registraron **226/226 pruebas automatizadas** y **180 casos de presentación adaptable** —15 rutas × 3 temas × 4 anchos— sin desbordamiento horizontal detectado. Es un chequeo técnico de la versión anterior a los ajustes, no una aprobación del aspecto ni una prueba física en Android o iPhone; tampoco acredita cambios posteriores.
+La V2 conserva Noir, Rosa y Fucsia, el Modo fácil y los avisos de cada servicio. Los efectos se pueden apagar y respetan la preferencia de movimiento reducido. La comprobación en un Android físico queda pendiente de la prueba del enlace por Walker.
 
-Recorrido, límites, recursos visuales y arranque: [Estudio Noir · estado del candidato local](docs/ESTUDIO_NOIR_20261023.md).
+El [estado del 23/10](docs/ESTUDIO_NOIR_20261023.md) conserva el contexto histórico anterior a esta integración.
 
 ## Tres atmósferas, una misma experiencia
 
@@ -85,6 +85,15 @@ npm run preview:demo
 ```
 
 Abre **http://127.0.0.1:4345/SensualXcape/**. La demo no necesita claves ni configuración de backend.
+
+Para comprobar la publicación conjunta de V1 y V2:
+
+```sh
+npm run build:pages
+npm run preview:pages
+```
+
+Abre **http://127.0.0.1:4349/SensualXcape/** para V1 y **http://127.0.0.1:4349/SensualXcape/v2/** para V2. GitHub Actions publica únicamente `dist-pages/` desde `main`.
 
 Para el ensayo funcional local con cuentas ficticias:
 

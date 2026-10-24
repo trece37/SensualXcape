@@ -1,4 +1,6 @@
 import { Vault, Upload, Plus, FileText, File as FileIcon, Image as ImageIcon, Search, Trash2, X, Download, Pencil, Info } from 'lucide';
+import { SXVaultObjects } from './effects/vault-objects.js';
+import { SXFluid } from './effects/fluid.js';
 
 export const COFRE_STUDIO_LIMITS = Object.freeze({ files: 12, fileBytes: 8 * 1024 * 1024, totalBytes: 30 * 1024 * 1024 });
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/bmp']);
@@ -22,8 +24,9 @@ export function createCofreView({ documentRef = document, windowRef = window, on
   const d = documentRef, w = windowRef, prefix = `sx-cofre-${++instance}`;
   const listeners = [], readers = new Set(), downloadUrls = new Map(), deleting = new Set();
   let entries = [], sequence = 0, epoch = 0, revision = 0, disposed = false, previewId = null, previewUrl = null, previewVersion = 0, editingId = null, clearing = false;
+  let sceneOpen = false, objects, fluid, holdTimer = null, held = false, pressStart = null, effectKey = '', observer;
   const el = (tag, cls, text) => { const node = d.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
-  const listen = (node, type, action) => { node.addEventListener(type, action); listeners.push(() => node.removeEventListener(type, action)); };
+  const listen = (node, type, action, options) => { node.addEventListener(type, action, options); listeners.push(() => node.removeEventListener(type, action, options)); };
   const icon = (nodes, cls = '') => {
     const svg = d.createElementNS('http://www.w3.org/2000/svg', 'svg');
     for (const [key, value] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false', class: `sx-cofre-icon ${cls}`.trim() })) svg.setAttribute(key, value);
@@ -50,9 +53,20 @@ export function createCofreView({ documentRef = document, windowRef = window, on
   const addFileButton = button('Añadir archivos', chooseFiles, Plus, 'sx-cofre-button-primary'); addFileButton.setAttribute('aria-controls', fileInput.id);
   const newNoteButton = button('Escribir una nota', () => openEditor(), Pencil, 'sx-cofre-button-soft');
   heroActions.append(addFileButton, newNoteButton); heroCopy.append(heroActions);
-  const heroArt = el('div', 'sx-cofre-hero-art'), heroImage = el('img'); heroImage.src = './assets/v2/cofre.webp'; heroImage.alt = ''; heroImage.width = 1000; heroImage.height = 900; heroImage.decoding = 'async';
-  const artFallback = el('span', 'sx-cofre-art-fallback'); artFallback.append(icon(Vault)); heroArt.append(artFallback, heroImage);
-  listen(heroImage, 'error', () => { heroImage.hidden = true; }); hero.append(heroCopy, heroArt); element.append(hero, fileInput);
+  const scene = el('div', 'sx-cofre-scene'); scene.id = `${prefix}-scene`; scene.setAttribute('aria-label', 'Escena de tu Cofre');
+  const heroArt = el('div', 'sx-cofre-hero-art'), heroImage = el('img', 'sx-cofre-open-art'); heroImage.src = './assets/v2/cofre.webp'; heroImage.alt = ''; heroImage.width = 1536; heroImage.height = 1024; heroImage.decoding = 'async';
+  const closedImage = el('img', 'sx-cofre-closed-art'); closedImage.src = './assets/v2/cofre-closed.png'; closedImage.alt = ''; closedImage.width = 1536; closedImage.height = 1024; closedImage.decoding = 'async';
+  const artFallback = el('span', 'sx-cofre-art-fallback'); artFallback.append(icon(Vault)); heroArt.append(artFallback, heroImage, closedImage);
+  const chestTouch = el('button', 'sx-cofre-chest-touch'); chestTouch.type = 'button'; chestTouch.setAttribute('aria-label', 'Abrir el Cofre. Toca o mantén pulsado.'); chestTouch.setAttribute('aria-expanded', 'false'); chestTouch.append(el('span', '', '◇'));
+  const sceneHint = el('p', 'sx-cofre-scene-hint', 'Toca el cofre. O mantén el dedo.');
+  const sceneLight = el('span', 'sx-cofre-scene-light'); sceneLight.setAttribute('aria-hidden', 'true');
+  scene.append(heroArt, sceneLight, chestTouch, sceneHint);
+  const sceneControls = el('div', 'sx-cofre-scene-controls');
+  const sceneToggle = button('Abrir mi Cofre', () => setSceneOpen(!sceneOpen), Vault, 'sx-cofre-button-link'); sceneToggle.setAttribute('aria-expanded', 'false'); sceneToggle.setAttribute('aria-controls', scene.id);
+  const rearrange = button('Reordenar objetos', () => objects?.reset(), undefined, 'sx-cofre-button-link'); rearrange.hidden = true;
+  sceneControls.append(sceneToggle, rearrange); heroCopy.append(sceneControls);
+  listen(heroImage, 'error', () => { heroImage.hidden = true; }); listen(closedImage, 'error', () => { closedImage.hidden = true; scene.classList.add('sx-cofre-no-closed-art'); });
+  hero.append(heroCopy, scene); element.append(hero, fileInput);
 
   const note = el('div', 'sx-cofre-session-note'); note.append(icon(Info), el('p', '', 'Solo en esta pestaña. Se vacía al recargar o cerrar: descarga lo que quieras conservar.'));
   note.append(button('Dónde se guardan tus cosas', () => onInfo('cofre'), undefined, 'sx-cofre-button-link')); element.append(note);
@@ -98,6 +112,60 @@ export function createCofreView({ documentRef = document, windowRef = window, on
   element.append(workspace, status);
   listen(search, 'input', renderList); listen(typeFilter, 'change', renderList);
 
+  objects = new SXVaultObjects({ host: scene,
+    onOpen: id => {
+      const entry = entries.find(item => item.id === id); if (!entry) return;
+      void openPreview(entry).then(() => {
+        if (!disposed && previewId === id && !preview.hidden && !element.closest('[hidden], .v11-hidden')) preview.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+      });
+    },
+    onMove: movement => {
+      if (fluid && effectsAllowed()) { fluid.splat(movement.x, movement.y, movement.dx, movement.dy, movement.power * 1.4); fluid.splat(movement.x - .03, movement.y + .02, movement.dx, movement.dy, movement.power * .6); }
+    },
+    onChange: state => {
+      if (state.action === 'dock') { report('Objeto recogido. Su archivo o nota sigue disponible en la lista.'); if (effectsAllowed()) fluid?.burst(.62, .62); }
+      if (state.action === 'reset' && effectsAllowed()) fluid?.burst(.5, .55);
+    }
+  });
+  function effectsAllowed() { return !d.body.classList.contains('sx-effects-off') && !d.body.classList.contains('sx-easy'); }
+  function clearHold() { if (holdTimer !== null) w.clearTimeout(holdTimer); holdTimer = null; chestTouch.classList.remove('is-holding'); }
+  function setSceneOpen(value) {
+    if (disposed) return;
+    sceneOpen = Boolean(value); clearHold(); scene.classList.toggle('is-open', sceneOpen);
+    for (const toggle of [sceneToggle, chestTouch]) toggle.setAttribute('aria-expanded', String(sceneOpen));
+    sceneToggle.querySelector('span').textContent = sceneOpen ? 'Cerrar mi Cofre' : 'Abrir mi Cofre';
+    chestTouch.setAttribute('aria-label', sceneOpen ? 'Cerrar el Cofre' : 'Abrir el Cofre. Toca o mantén pulsado.');
+    sceneHint.hidden = sceneOpen; rearrange.hidden = !sceneOpen;
+    objects.setOpen(sceneOpen); syncEffects();
+    if (effectsAllowed()) fluid?.burst(.6, .59);
+  }
+  function syncEffects() {
+    if (disposed) return;
+    const active = element.isConnected && !d.hidden && !element.closest('[hidden], .v11-hidden');
+    const easy = d.body.classList.contains('sx-easy'), enabled = active && effectsAllowed(), theme = d.body.dataset.theme || 'noir';
+    const key = `${active}:${enabled}:${easy}:${theme}`; if (key === effectKey) return; effectKey = key;
+    if (!active || easy) { clearHold(); held = false; }
+    scene.hidden = easy; sceneControls.hidden = easy; objects.setEnabled(active && !easy);
+    // Real browsers expose these APIs. In DOM-only tests or unsupported browsers
+    // the same objects and content remain fully usable without a canvas.
+    if (!fluid && enabled && typeof w.ResizeObserver === 'function' && typeof w.IntersectionObserver === 'function') fluid = new SXFluid({ host: scene, palette: theme });
+    fluid?.setPalette(theme); fluid?.setEnabled(enabled);
+  }
+  listen(chestTouch, 'pointerdown', event => {
+    if (event.button !== 0 || event.isPrimary === false) return;
+    held = false; pressStart = { x: event.clientX, y: event.clientY }; clearHold(); chestTouch.classList.add('is-holding');
+    holdTimer = w.setTimeout(() => { holdTimer = null; if (!disposed && !element.closest('[hidden], .v11-hidden') && !d.body.classList.contains('sx-easy')) { held = true; setSceneOpen(!sceneOpen); } clearHold(); }, 550);
+  }, { passive: true });
+  listen(chestTouch, 'pointermove', event => { if (pressStart && Math.hypot(event.clientX - pressStart.x, event.clientY - pressStart.y) > 12) clearHold(); }, { passive: true });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) listen(chestTouch, type, clearHold, { passive: true });
+  listen(chestTouch, 'click', () => { clearHold(); if (held) { held = false; return; } setSceneOpen(!sceneOpen); });
+  listen(chestTouch, 'contextmenu', event => event.preventDefault());
+  listen(d, 'pointerdown', event => { if (!chestTouch.contains(event.target)) { clearHold(); held = false; } }, true);
+  listen(d, 'keydown', event => { if (event.key === 'Escape' || event.key === 'Tab') clearHold(); });
+  listen(w, 'blur', clearHold); listen(w, 'hashchange', () => { clearHold(); held = false; syncEffects(); });
+  listen(d, 'visibilitychange', () => { clearHold(); syncEffects(); }); listen(d, 'sx:effects-change', () => { clearHold(); held = false; syncEffects(); });
+  if (w.MutationObserver) { observer = new w.MutationObserver(syncEffects); observer.observe(d.body, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'data-theme'] }); }
+
   function addFiles(files) {
     if (disposed) return;
     let added = 0; const errors = [];
@@ -120,6 +188,7 @@ export function createCofreView({ documentRef = document, windowRef = window, on
     if (disposed) return;
     const query = search.value.trim().toLocaleLowerCase('es');
     const matches = entries.filter(entry => (!query || entry.name.toLocaleLowerCase('es').includes(query)) && (typeFilter.value === 'all' || entry.kind === typeFilter.value));
+    objects?.setItems(matches.map(entry => ({ id: entry.id, title: entry.name, kind: entry.kind, detail: `${{ image: 'Imagen', text: 'Texto', note: 'Nota', file: 'Archivo' }[entry.kind]} · ${bytesLabel(entry.size)}` })), entries.map(entry => entry.id));
     list.replaceChildren();
     counter.textContent = `${entries.length} de 12 elementos · ${bytesLabel(totalBytes())} de 30 MB`;
     clearAllButton.disabled = !entries.length || clearing;
@@ -251,7 +320,7 @@ export function createCofreView({ documentRef = document, windowRef = window, on
   }
   function destroy() {
     if (disposed) return;
-    reset(); disposed = true; listeners.splice(0).forEach(clean => clean()); element.remove();
+    reset(); clearHold(); observer?.disconnect(); fluid?.destroy(); objects?.destroy(); disposed = true; listeners.splice(0).forEach(clean => clean()); element.remove();
   }
   renderList();
   return { element, reset, destroy };

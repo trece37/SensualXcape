@@ -211,3 +211,57 @@
   .sx-cofre-page .sx-cofre-button, .sx-cofre-hero, .sx-cofre-library, .sx-cofre-dropzone, .sx-cofre-item { border: 1px solid CanvasText; }
   .sx-cofre-hero-art { display: none; }
 }
+
+/* V2: the same Cofre entries can also be handled as objects around its artwork. */
+.sx-cofre-hero { display: grid; grid-template-columns: minmax(235px,.85fr) minmax(320px,1.15fr); gap: 8px; padding: 8px 0 12px; overflow: visible; }
+.sx-cofre-hero .sx-cofre-hero-copy { width: 100%; padding: 25px 22px; }
+.sx-cofre-scene { position: relative; isolation: isolate; overflow: hidden; height: 440px; min-width: 0; background: var(--cofre-bg); touch-action: pan-y; }
+.sx-cofre-scene .sx-cofre-hero-art { inset: 0; z-index: 0; }
+.sx-cofre-scene .sx-cofre-hero-art>img { object-position: 77% 57%; transition: opacity 1s ease, transform 1s ease; }
+.sx-cofre-scene .sx-cofre-open-art { opacity: 0; transform: scale(.975) translateY(5px); }
+.sx-cofre-scene .sx-cofre-closed-art { opacity: 1; }
+.sx-cofre-scene.is-open .sx-cofre-open-art { opacity: 1; transform: none; }
+.sx-cofre-scene.is-open .sx-cofre-closed-art { opacity: 0; transform: perspective(700px) rotateX(-11deg) translateY(-7px); }
+.sx-cofre-scene.sx-cofre-no-closed-art .sx-cofre-open-art { opacity: 1; transform: none; }
+.sx-cofre-scene .sx-liquid-smoke { mix-blend-mode: screen; }
+.sx-cofre-scene-light { position: absolute; left: 28%; top: 38%; width: 65%; height: 45%; z-index: 3; pointer-events: none; opacity: 0; background: radial-gradient(ellipse,#ffd7ac99,#ff277950 25%,transparent 67%); filter: blur(13px); }
+.sx-cofre-scene.is-open .sx-cofre-scene-light { animation: sx-cofre-opening-light 1.5s ease-out both; }
+.sx-cofre-page .sx-cofre-chest-touch { position: absolute; left: 16%; right: 5%; bottom: 87px; height: 225px; z-index: 4; border: 0; background: transparent; color: var(--cofre-accent); display: grid; place-items: center; touch-action: pan-y; cursor: pointer; }
+.sx-cofre-chest-touch>span { display: grid; place-items: center; width: 64px; height: 64px; font-size: 39px; border: 1px solid color-mix(in srgb,var(--cofre-accent) 50%,transparent); border-radius: 50%; background: var(--cofre-glass); box-shadow: 0 0 24px var(--sx-glow); transition: transform .3s,opacity .4s; backdrop-filter: blur(5px); }
+.sx-cofre-chest-touch.is-holding>span { transform: scale(1.2); box-shadow: 0 0 38px var(--sx-glow); }
+.sx-cofre-scene.is-open .sx-cofre-chest-touch { z-index: 1; }
+.sx-cofre-scene.is-open .sx-cofre-chest-touch>span { opacity: 0; }
+.sx-cofre-page .sx-cofre-scene-hint { position: absolute; top: 26px; left: 16px; right: 16px; text-align: center; font: italic 17px/1.5 var(--sx-heading,Georgia,serif); color: var(--cofre-muted); z-index: 3; pointer-events: none; }
+.sx-cofre-scene-controls { display: flex; align-items: center; gap: 8px 17px; flex-wrap: wrap; margin-top: 10px; }
+.sx-cofre-page .sx-cofre-scene-controls .sx-cofre-button { font-size: 13px; min-height: 44px; }
+.sx-cofre-scene .vo-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.sx-cofre-scene .vo-card { position: absolute; width: 148px; height: 137px; padding: 9px 11px; border: 1px solid color-mix(in srgb,var(--cofre-accent) 65%,var(--cofre-line)); border-radius: 12px; color: var(--cofre-text); background: linear-gradient(145deg,color-mix(in srgb,var(--cofre-raised) 88%,transparent),var(--cofre-glass)); box-shadow: inset 0 1px #ffffff44,0 0 20px var(--sx-glow),0 14px 26px #0005; backdrop-filter: blur(13px); pointer-events: auto; touch-action: pan-y; transform-origin: center; transition: box-shadow .18s,filter .18s; }
+.sx-cofre-scene .vo-topline { display: flex; align-items: center; justify-content: space-between; height: 39px; }
+.sx-cofre-scene .vo-file-icon { display: grid; place-items: center; width: 35px; height: 35px; font-size: 26px; color: var(--cofre-accent); border: 1px solid var(--cofre-line); border-radius: 8px; background: var(--cofre-raised); }
+.sx-cofre-page .vo-handle { min-width: 44px; min-height: 44px; font-size: 27px; color: var(--cofre-accent); background: transparent; border: 0; border-radius: 7px; padding: 0; cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; position: relative; right: -7px; top: -2px; }
+.sx-cofre-page .vo-open { display: block; width: 100%; min-height: 65px; padding: 9px 0 0; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer; touch-action: pan-y; }
+.sx-cofre-scene .vo-title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.sx-cofre-scene .vo-detail { display: block; margin-top: 5px; font-size: 9px; line-height: 1.4; color: var(--cofre-muted); }
+.sx-cofre-scene .vo-card.is-dragging { border-color: var(--cofre-accent); box-shadow: inset 0 1px #ffffff66,0 0 0 1px var(--cofre-accent),0 0 32px var(--sx-glow),0 20px 35px #0007; filter: brightness(1.13); cursor: grabbing; }
+.sx-cofre-scene .vo-card.is-dragging .vo-handle { cursor: grabbing; }
+.sx-cofre-scene .vo-drop-zone { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 54px; padding: 8px 12px; border: 1px dashed var(--cofre-line); border-radius: 9px; color: var(--cofre-text); background: var(--cofre-glass); backdrop-filter: blur(7px); pointer-events: none; transition: box-shadow .2s,border-color .2s; }
+.sx-cofre-scene .vo-drop-icon { color: var(--cofre-accent); font-size: 25px; }
+.sx-cofre-scene .vo-drop-label { font-size: 11px; }
+.sx-cofre-scene .vo-drop-zone.is-over { border-color: var(--cofre-accent); border-style: solid; box-shadow: 0 0 25px var(--sx-glow); }
+.sx-cofre-page .vo-recover { position: absolute; right: 12px; bottom: 76px; z-index: 30; min-height: 44px; padding: 8px 12px; border: 1px solid var(--cofre-line); border-radius: 7px; background: var(--cofre-surface); color: var(--cofre-text); font-size: 11px; pointer-events: auto; cursor: pointer; }
+.sx-cofre-scene .vo-layer.is-open .vo-card { animation: sx-cofre-object-appear .7s ease both; }
+.sx-cofre-scene .vo-layer.is-open .vo-card:nth-child(4) { animation-delay: .07s; }
+.sx-cofre-scene .vo-layer.is-open .vo-card:nth-child(5) { animation-delay: .14s; }
+.sx-cofre-scene .vo-layer.is-open .vo-card:nth-child(6) { animation-delay: .21s; }
+.sx-effects-off .sx-cofre-scene-light,.sx-effects-off .sx-cofre-scene .sx-liquid-smoke { display: none; }
+.sx-effects-off .sx-cofre-scene .vo-card { animation: none; box-shadow: inset 0 1px #ffffff33,0 9px 22px #0003; }
+.sx-effects-off .sx-cofre-scene img,.sx-effects-off .sx-cofre-chest-touch>span { transition: none; }
+.sx-easy .sx-cofre-scene,.sx-easy .sx-cofre-scene-controls { display: none; }
+.sx-easy .sx-cofre-hero { display: block; }
+@keyframes sx-cofre-object-appear { from { opacity: 0; translate: 0 45px; scale: .65; filter: blur(3px); } to { opacity: 1; translate: 0 0; scale: 1; filter: none; } }
+@keyframes sx-cofre-opening-light { 0% { opacity: 0; transform: scale(.4); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1.5); } }
+@media (max-width: 1000px) { .sx-cofre-hero { grid-template-columns: minmax(220px,.85fr) minmax(280px,1.15fr); } .sx-cofre-hero .sx-cofre-hero-copy { padding-inline: 15px; } }
+@media (max-width: 760px) { .sx-cofre-hero { grid-template-columns: minmax(0,1fr); gap: 0; padding: 0; } .sx-cofre-hero .sx-cofre-hero-copy { padding: 23px 19px 5px; } .sx-cofre-scene { height: 430px; } .sx-cofre-hero .sx-cofre-title { max-width: 16ch; } .sx-cofre-hero .sx-cofre-intro { max-width: 36ch; } }
+@media (max-width: 359px) { .sx-cofre-scene .vo-card { width: 124px; height: 139px; padding-inline: 9px; } .sx-cofre-scene .vo-title { font-size: 10px; } .sx-cofre-scene .vo-detail { font-size: 8px; } }
+@media (prefers-reduced-motion: reduce) { .sx-cofre-scene .vo-card,.sx-cofre-scene-light { animation: none !important; } .sx-cofre-scene img,.sx-cofre-chest-touch>span { transition: none !important; } }
+@media (forced-colors: active) { .sx-cofre-scene .vo-card,.sx-cofre-scene .vo-drop-zone { border: 1px solid CanvasText; } .sx-cofre-scene .sx-liquid-smoke,.sx-cofre-scene-light { display: none; } }

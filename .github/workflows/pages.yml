@@ -24,11 +24,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run build:demo
+      - run: npm run build:pages
       - uses: actions/upload-pages-artifact@v4
         if: github.event_name != 'pull_request'
         with:
-          path: dist
+          path: dist-pages
 
   deploy:
     if: github.event_name != 'pull_request'

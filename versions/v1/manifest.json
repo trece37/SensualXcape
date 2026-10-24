@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "label": "V1 (demo V1.1)",
+  "source_commit": "1a645827aa5c5b92b998a5373810bdfd3a4dbfbb",
+  "frozen_on": "2026-10-24",
+  "method": "git archive of source commit, original buildDemo, esbuild 0.28.2 from pinned dependency lock",
+  "public_path": "/SensualXcape/",
+  "files": {
+    ".nojekyll": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    "assets/v11/portal-unicorn.png": {
+      "sha256": "a79027b1dd9216252f91364c91d236f744272df5daf7a1aed5eee0cbcedba74b",
+      "size": 2447776
+    },
+    "demo.css": {
+      "sha256": "9423e0547e21a68adb6c51bbeba1010a50cecebcbdb4f3b4dacdc1421ce6adfd",
+      "size": 76806
+    },
+    "demo.js": {
+      "sha256": "643bc8df47c4c32ee34105bbd1bcbf34bd87bf8c84f8f57b3b83940cc35bb966",
+      "size": 39457
+    },
+    "index.html": {
+      "sha256": "f370ea4f24a400311b2696b28cf27700abc6aedb04d87d426ac3d039dc254dbb",
+      "size": 6765
+    }
+  }
+}

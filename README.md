@@ -5,7 +5,8 @@
 <h3 align="center">Un espacio propio. Conexiones que tú eliges. Herramientas que te sirven.</h3>
 
 <p align="center">
-  <a href="https://trece37.github.io/SensualXcape/"><strong>✨ ABRIR LA DEMO WEB</strong></a>
+  <a href="https://trece37.github.io/SensualXcape/v2/"><strong>✨ ABRIR SENSUALXCAPE V2</strong></a>
+  &nbsp; · &nbsp; <a href="https://trece37.github.io/SensualXcape/">Conservar la V1 original</a>
   &nbsp; · &nbsp; <a href="#tres-atmósferas-una-misma-experiencia">Ver los estilos</a>
   &nbsp; · &nbsp; <a href="docs/DESARROLLO.md">Guía de desarrollo</a>
 </p>
@@ -35,7 +36,7 @@ El candidato del **23/10/2026** amplía la experiencia con una entrada para pers
 
 El **24/10/2026** se incorporaron las correcciones de la maqueta y la dirección de efectos aprobada: imágenes integradas con el fondo, servicios compactos, ayuda discreta, reflejos y respuestas breves. El humo queda en las ilustraciones de entrada y en el Cofre. El Cofre se abre al tocarlo o mantener pulsado; sus objetos representan las mismas notas y archivos que aparecen en la lista. Moverlos o recogerlos no elimina su contenido.
 
-**Se mantienen dos versiones.** La V1.1 original conserva la raíz de GitHub Pages. La V2 se prepara bajo `/SensualXcape/v2/`; su publicación está pendiente de resolver el acceso de escritura a GitHub. El build comprueba que los cinco archivos de la V1 conservan exactamente sus huellas originales. Estado y comprobaciones: [V2 · implementación y verificación](docs/V2_20261024.md).
+**Se mantienen dos versiones.** La [V1.1 original](https://trece37.github.io/SensualXcape/) conserva la raíz de GitHub Pages. La [V2](https://trece37.github.io/SensualXcape/v2/) utiliza `/SensualXcape/v2/`. GitHub Actions comprueba y publica ambas desde el mismo repositorio. El build verifica que los cinco archivos de la V1 conservan exactamente sus huellas originales. Estado y comprobaciones: [V2 · implementación y verificación](docs/V2_20261024.md).
 
 El perfil, las fotos y el Cofre funcionan en la pestaña: permiten probar acciones reales del navegador, sin guardar tus aportaciones después de recargar. La entrada no autentica cuentas; los mensajes, la comunidad y los avisos siguen siendo simulaciones, y AuraLink no tiene generación de IA conectada.
 
@@ -63,7 +64,7 @@ Capturas del ensayo local V1.1 con datos ficticios. La demo pública conserva la
 | --- | --- |
 | **Mensajes y contactos** | Aceptar o rechazar solicitudes ficticias, abrir conversaciones, añadir ejemplos y probar un bloqueo. |
 | **Forocromos** | Buscar, leer y responder en temas inventados entre compañeras. |
-| **Mi Cofre** | Añadir, consultar y retirar archivos de muestra. No accede a tus archivos reales. |
+| **Mi Cofre** | V1: archivos de muestra. V2: notas y archivos elegidos voluntariamente, sólo en la pestaña; consulta, movimiento, búsqueda y descarga. |
 | **Estoy segura** | Simular manualmente un check-in y su final. Sin temporizador activo, avisos ni ayuda conectada. |
 | **Mi perfil** | Ensayar un alias, una presentación y opciones de visibilidad. |
 | **Mis límites** | Explorar bloqueos y recibos de aviso ficticios. Sin moderación conectada. |

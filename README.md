@@ -29,6 +29,20 @@ Esta V1.1 reúne su identidad visual y sus recorridos en una web adaptable. En e
 
 > **Prueba sin cuenta.** Todos los contactos, conversaciones, archivos y temas de comunidad de la demo son inventados. Sus cambios viven solo en memoria y desaparecen al recargar. No envía mensajes, no cobra ni avisa a nadie.
 
+## Estudio Noir · candidato local en revisión
+
+El candidato del **23/10/2026** amplía la experiencia con una entrada para personas adultas, dos caminos —área profesional y visitantes—, un perfil con fotos y un Cofre que permite trabajar con notas y archivos de prueba. Noir es el estilo principal; Rosa y Fucsia conservan las otras dos atmósferas. Cada espacio incluye una guía «Cómo funciona» y avisos en lenguaje cotidiano.
+
+**El aspecto actual sigue en revisión.** Walker indicó que no le gusta cómo ha quedado y que debe acercarse a las imágenes aprobadas de portada y acceso profesional, conservando el unicornio y su presencia visual. Se está iterando sobre esa corrección; los iconos específicos se diseñarán después. Este candidato no tiene aceptación visual.
+
+**Todavía no se ha publicado.** El repositorio remoto y la demo de GitHub Pages enlazada arriba siguen en V1.1. La revisión local del candidato está en [127.0.0.1:4347/SensualXcape/](http://127.0.0.1:4347/SensualXcape/), mientras esté iniciado su servidor de previsualización.
+
+El perfil, las fotos y el Cofre funcionan en la pestaña: permiten probar acciones reales del navegador, sin guardar tus aportaciones después de recargar. La entrada no autentica cuentas; los mensajes, la comunidad y los avisos siguen siendo simulaciones, y AuraLink no tiene generación de IA conectada.
+
+Antes de este refinamiento visual se registraron **226/226 pruebas automatizadas** y **180 casos de presentación adaptable** —15 rutas × 3 temas × 4 anchos— sin desbordamiento horizontal detectado. Es un chequeo técnico de la versión anterior a los ajustes, no una aprobación del aspecto ni una prueba física en Android o iPhone; tampoco acredita cambios posteriores.
+
+Recorrido, límites, recursos visuales y arranque: [Estudio Noir · estado del candidato local](docs/ESTUDIO_NOIR_20261023.md).
+
 ## Tres atmósferas, una misma experiencia
 
 <table>

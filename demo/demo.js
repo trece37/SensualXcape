@@ -1,4 +1,5 @@
 import { mountPlatform } from '../platform-v11.js';
+import { mountStudio } from './studio.js';
 
 /** Static demonstration only: no SDK, account, API, timer or durable user data. */
 export function mountDemo({ documentRef = document, windowRef = window } = {}) {
@@ -120,7 +121,12 @@ export function mountDemo({ documentRef = document, windowRef = window } = {}) {
   return { platform, destroy() { platform.destroy(); cleanups.splice(0).forEach(clean => clean()); memory.clear(); draft.clear(); histories.clear(); } };
 }
 
+export function bootStudio({ documentRef = document, windowRef = window } = {}) {
+  const demo = mountDemo({ documentRef, windowRef });
+  const studio = mountStudio({ platform: demo.platform, documentRef, windowRef });
+  return { ...demo, studio, destroy() { studio?.destroy(); demo.destroy(); } };
+}
 if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => mountDemo(), { once: true });
-  else mountDemo();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => bootStudio(), { once: true });
+  else bootStudio();
 }

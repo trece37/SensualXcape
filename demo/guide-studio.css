@@ -1,0 +1,49 @@
+/* A quiet, scoped service guide. It uses the same themes as the shared application. */
+.sx-guide-page{--guide-surface:var(--sx-surface,var(--v11-surface,#15151b));--guide-raised:var(--sx-raised,var(--v11-raised,#202026));--guide-text:var(--sx-text,var(--v11-text,#f7f4f4));--guide-muted:var(--sx-muted,var(--v11-muted,#c5bbc0));--guide-line:var(--sx-line,var(--v11-line,#44343b));--guide-accent:var(--sx-accent,var(--v11-accent,#f05261));--guide-glass:var(--sx-glass,var(--v11-glass-panel,#15151bf0));color:var(--guide-text);font:400 16px/1.7 var(--sx-font,Inter,ui-sans-serif,system-ui,sans-serif);max-width:1440px;margin:auto;min-width:0}
+.sx-guide-page *{box-sizing:border-box}
+.sx-guide-page svg{display:block;width:22px;height:22px;flex:none}
+.sx-guide-heading{display:flex;align-items:flex-start;gap:22px;max-width:970px;margin-bottom:38px}
+.sx-guide-emblem{display:grid;place-items:center;flex:none;width:63px;height:68px;border:1px solid var(--guide-line);border-radius:10px;background:var(--guide-raised);color:var(--guide-accent)}
+.sx-guide-emblem svg{width:32px;height:32px}
+.sx-guide-page .sx-guide-kicker{font-size:16px;font-weight:650;line-height:1.5;letter-spacing:.055em;color:var(--guide-accent);margin:0 0 10px}
+.sx-guide-page h2,.sx-guide-page h3{font-family:var(--sx-heading,Georgia,'Times New Roman',serif);font-weight:400;letter-spacing:-.035em;color:var(--guide-text)}
+.sx-guide-page h2{font-size:clamp(34px,4.6vw,56px);line-height:1.1;margin:0 0 18px}
+.sx-guide-intro{font-size:18px;line-height:1.8;color:var(--guide-muted);max-width:770px;margin:0}
+.sx-guide-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:21px}
+.sx-guide-card{display:flex;align-items:flex-start;flex-direction:column;min-width:0;overflow:hidden;padding:29px 26px;border:1px solid var(--guide-line);border-radius:10px;background:var(--guide-surface);box-shadow:var(--sx-shadow,var(--v11-shadow,0 15px 44px #0002))}
+.sx-guide-icon{display:grid;place-items:center;width:51px;height:55px;border-radius:8px;background:var(--guide-raised);border:1px solid var(--guide-line);color:var(--guide-accent);margin-bottom:23px}
+.sx-guide-icon svg{width:27px;height:27px}
+.sx-guide-card .sx-guide-kicker{margin-bottom:11px;font-size:16px;letter-spacing:.015em;line-height:1.5}
+.sx-guide-page h3{font-size:31px;line-height:1.15;margin:0 0 15px;overflow-wrap:anywhere}
+.sx-guide-description{font-size:16px;line-height:1.85;color:var(--guide-muted);margin:0 0 28px}
+.sx-guide-page button{font:inherit;font-size:16px;line-height:1.5;cursor:pointer;min-height:48px;touch-action:manipulation}
+.sx-guide-button{display:flex;align-items:center;justify-content:space-between;gap:15px;width:100%;margin-top:auto;border:1px solid var(--guide-line);border-radius:8px;padding:12px 15px;color:var(--guide-text);background:var(--guide-raised);font-weight:600}
+.sx-guide-button>svg{width:20px;height:20px;color:var(--guide-accent)}
+.sx-guide-page button:focus-visible{outline:2px solid var(--guide-accent);outline-offset:5px}
+.sx-guide-button:hover{border-color:var(--guide-accent)}
+.sx-guide-footer{display:flex;align-items:center;justify-content:space-between;gap:22px;flex-wrap:wrap;padding:31px 4px 5px;color:var(--guide-muted);font-size:16px;line-height:1.8}
+.sx-guide-footer p{font-size:16px;text-align:left;max-width:710px;margin:0;color:var(--guide-muted)}
+.sx-guide-home{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:1px solid var(--guide-line);background:var(--guide-surface);color:var(--guide-text);border-radius:8px;padding:12px 17px;white-space:nowrap}
+.sx-guide-home>svg{width:20px;height:20px;color:var(--guide-accent)}
+@supports(backdrop-filter:blur(1px)){.sx-guide-card{background:var(--guide-glass);backdrop-filter:blur(11px);-webkit-backdrop-filter:blur(11px)}}
+@media(max-width:1150px){.sx-guide-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:19px}.sx-guide-card{padding:27px 24px}}
+@media(max-width:650px){.sx-guide-heading{gap:15px;margin-bottom:28px}.sx-guide-emblem{width:45px;height:52px;border-radius:8px}.sx-guide-emblem svg{width:26px;height:26px}.sx-guide-page h2{font-size:36px}.sx-guide-intro{font-size:16px;line-height:1.8}.sx-guide-grid{grid-template-columns:1fr;gap:17px}.sx-guide-card{padding:26px 22px;border-radius:10px}.sx-guide-icon{width:46px;height:50px;border-radius:8px;margin-bottom:20px}.sx-guide-page h3{font-size:30px}.sx-guide-description{margin-bottom:24px}.sx-guide-footer{padding-top:26px;gap:18px}.sx-guide-home{width:100%}}
+@media(max-width:360px){.sx-guide-heading{display:block}.sx-guide-emblem{margin-bottom:18px}.sx-guide-page h2{font-size:34px}.sx-guide-card{padding:23px 18px}}
+/* Same smoked glass and ruby medallions as the approved entrance artwork. */
+.sx-guide-page{--guide-bg:var(--sx-bg,var(--v11-bg,#090a0d));--guide-sheen:color-mix(in srgb,var(--guide-text) 5%,transparent);--guide-medal-ink:var(--guide-accent)}
+body[data-theme=noir] .sx-guide-page{--guide-bg:#050507;--guide-surface:#0c0b0f;--guide-raised:#151015;--guide-glass:#0e0b0fe8;--guide-line:#70566070;--guide-medal-ink:#ffe7ec;--guide-sheen:#ffe5ed08}
+.sx-guide-card{background-image:linear-gradient(135deg,var(--guide-sheen),transparent 52%);border-radius:10px;padding:27px 24px;box-shadow:inset 0 1px 0 var(--guide-sheen),0 12px 30px #00000018}
+.sx-guide-emblem,.sx-guide-icon{width:56px;height:56px;border-radius:50%;color:var(--guide-medal-ink);border:1px solid color-mix(in srgb,var(--guide-accent) 75%,var(--guide-line));background:radial-gradient(circle at 50% 12%,color-mix(in srgb,var(--guide-accent) 18%,transparent),transparent 64%),linear-gradient(145deg,color-mix(in srgb,var(--guide-bg) 88%,var(--guide-accent)),var(--guide-bg));box-shadow:inset 0 1px 0 #ffffff1c,inset 0 -8px 15px color-mix(in srgb,var(--guide-accent) 9%,transparent),0 0 21px var(--sx-glow,var(--v11-glow,#d9244624))}
+.sx-guide-emblem svg,.sx-guide-icon svg{width:27px;height:27px;stroke-width:1.5;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--guide-accent) 38%,transparent))}
+.sx-guide-icon{margin-bottom:21px}
+.sx-guide-heading{gap:20px;margin-bottom:32px}
+.sx-guide-page h2{font-size:clamp(34px,4.2vw,52px)}
+.sx-guide-page h3{font-size:30px}
+.sx-guide-description{line-height:1.7;margin-bottom:24px}
+.sx-guide-button,.sx-guide-home{background:linear-gradient(160deg,var(--guide-sheen),transparent 70%),var(--guide-glass);border-radius:7px;box-shadow:inset 0 1px 0 var(--guide-sheen);font-weight:500}
+.sx-guide-button>svg{width:18px;height:18px}
+@media(max-width:1150px){.sx-guide-grid{gap:16px}.sx-guide-card{padding:25px 23px}}
+@media(max-width:650px){.sx-guide-heading{gap:14px;margin-bottom:27px}.sx-guide-emblem{width:46px;height:46px;margin-top:3px;border-radius:50%}.sx-guide-emblem svg{width:24px;height:24px}.sx-guide-page h2{font-size:35px;margin-bottom:15px}.sx-guide-grid{gap:14px}.sx-guide-card{display:grid;grid-template-columns:49px minmax(0,1fr);column-gap:15px;row-gap:0;padding:22px 18px;border-radius:9px}.sx-guide-icon{grid-column:1;grid-row:1/span 2;width:48px;height:48px;border-radius:50%;margin:2px 0 0}.sx-guide-icon svg{width:24px;height:24px}.sx-guide-card>.sx-guide-kicker{grid-column:2;font-size:16px;line-height:1.4;margin:0 0 7px;letter-spacing:0}.sx-guide-card>h3{grid-column:2;font-size:28px;margin:0 0 15px}.sx-guide-description{grid-column:1/-1;margin:0 0 20px;line-height:1.7}.sx-guide-button{grid-column:1/-1;margin-top:0;min-height:46px;padding:11px 14px}.sx-guide-footer{gap:16px;padding-top:25px}.sx-guide-home{min-height:46px}}
+@media(max-width:360px){.sx-guide-heading{display:flex}.sx-guide-emblem{margin:3px 0 0;width:42px;height:42px}.sx-guide-emblem svg{width:23px;height:23px}.sx-guide-page h2{font-size:31px}.sx-guide-card{padding:21px 16px;column-gap:13px}}
+@media(prefers-reduced-transparency:reduce){.sx-guide-card{background:var(--guide-surface);backdrop-filter:none;-webkit-backdrop-filter:none}}
+@media(forced-colors:active){.sx-guide-card,.sx-guide-icon,.sx-guide-emblem{background:Canvas;color:CanvasText;border-color:CanvasText;backdrop-filter:none}.sx-guide-button,.sx-guide-home{background:ButtonFace;color:ButtonText;border-color:ButtonText}}

@@ -20,7 +20,7 @@ const LEGACY = { 'chat-panel': 'messages', 'cofre-panel': 'cofre', 'forocromos-p
 export function mountPlatform({ documentRef = document, windowRef = window } = {}) {
   const d = documentRef, w = windowRef, main = d.querySelector('main');
   if (!main || d.getElementById('v11-shell')) return null;
-  const cleanups = [], pages = new Map(), routeScroll = new Map(); let actor = '', route = 'home', pending = '', disposed = false, hasNavigated = false;
+  const cleanups = [], pages = new Map(), routeScroll = new Map(), allowedRoutes = new Set(ROUTES), customTitles = new Map(); let actor = '', route = 'home', pending = '', disposed = false, hasNavigated = false, routeGuard = null;
   const previousScrollRestoration = w.history.scrollRestoration;
   if ('scrollRestoration' in w.history) w.history.scrollRestoration = 'manual';
   const el = (tag, cls, text) => { const n = d.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
@@ -167,7 +167,7 @@ export function mountPlatform({ documentRef = document, windowRef = window } = {
     if (disposed) return; discover();
     for (const [key, page] of pages) page.toggleAttribute('v11-hidden', key !== route);
     for (const n of shell.querySelectorAll('button[data-route]')) { if (n.dataset.route === route) n.setAttribute('aria-current', 'page'); else n.removeAttribute('aria-current'); }
-    pageTitle.textContent = { home: 'Inicio', access: 'Acceso al ensayo', settings: 'Preferencias' }[route] || SERVICES.find(item => item.route === route)?.title || 'Tu espacio';
+    pageTitle.textContent = customTitles.get(route) || { home: 'Inicio', access: 'Acceso al ensayo', settings: 'Preferencias' }[route] || SERVICES.find(item => item.route === route)?.title || 'Tu espacio';
     const accountLabel = actor ? `Cuenta ${actor.split('@')[0].toUpperCase()}` : 'Entrar al ensayo';
     account.querySelector('.v11-account-label').textContent = accountLabel;
     account.setAttribute('aria-label', accountLabel); account.title = accountLabel;
@@ -179,7 +179,11 @@ export function mountPlatform({ documentRef = document, windowRef = window } = {
     w.history[replace ? 'replaceState' : 'pushState']({ ...state, sxV11Route: route }, '', `#${route}`);
   }
   function navigate(destination, { hash = true, focus = true, replace = false } = {}) {
-    if (!ROUTES.has(destination)) destination = 'home';
+    const requested = destination;
+    if (!allowedRoutes.has(destination)) destination = 'home';
+    if (routeGuard) destination = routeGuard(destination) || destination;
+    const guardRedirect = Boolean(routeGuard && destination !== requested);
+    if (!allowedRoutes.has(destination)) destination = 'home';
     if (['messages', 'community', 'cofre', 'care'].includes(destination) && !actor) { pending = destination; destination = 'access'; }
     const changed = route !== destination;
     if (changed && hasNavigated) routeScroll.set(route, {
@@ -189,7 +193,7 @@ export function mountPlatform({ documentRef = document, windowRef = window } = {
       }))
     });
     route = destination;
-    if (hash && w.location.hash !== `#${route}`) writeHistory(replace || !hasNavigated);
+    if ((hash || guardRedirect) && w.location.hash !== `#${route}`) writeHistory(replace || !hasNavigated);
     closeDrawer(false); render();
     if (focus) main.focus({ preventScroll: true });
     if (changed && hasNavigated) {
@@ -198,6 +202,7 @@ export function mountPlatform({ documentRef = document, windowRef = window } = {
       w.scrollTo?.({ top: position?.top || 0, behavior: 'instant' });
     }
     hasNavigated = true;
+    w.dispatchEvent(new w.CustomEvent('sx:route', { detail: { route } }));
   }
   function readHash() {
     const key = w.location.hash.slice(1);
@@ -220,7 +225,14 @@ export function mountPlatform({ documentRef = document, windowRef = window } = {
   // Module scripts are independent ESM entries; observe insertion, not their private states.
   const observer = new w.MutationObserver(() => { discover(); render(); }); observer.observe(main, { childList: true });
   sessionChanged(); readHash();
-  return { navigate, setTheme, get route() { return route; }, destroy() { disposed = true; observer.disconnect(); cleanups.splice(0).forEach(fn => fn()); previews.destroy(); if ('scrollRestoration' in w.history) w.history.scrollRestoration = previousScrollRestoration; } };
+  return { navigate, setTheme, get route() { return route; },
+    registerPage(key, node, { title = '' } = {}) {
+      if (!/^[a-z][a-z-]*$/.test(key) || !node || node.ownerDocument !== d) throw new Error('Invalid page registration');
+      const previous = pages.get(key); if (previous && previous !== node) previous.remove();
+      allowedRoutes.add(key); if (title) customTitles.set(key, title); addPage(key, node); render(); return previous;
+    },
+    setRouteGuard(guard) { routeGuard = typeof guard === 'function' ? guard : null; },
+    destroy() { disposed = true; routeGuard = null; observer.disconnect(); cleanups.splice(0).forEach(fn => fn()); previews.destroy(); if ('scrollRestoration' in w.history) w.history.scrollRestoration = previousScrollRestoration; } };
 }
 
 if (typeof document !== 'undefined') {

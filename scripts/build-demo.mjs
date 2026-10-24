@@ -3,8 +3,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 
-const DEMO_FILES = new Set(['index.html', 'demo.js', 'demo.css', '.nojekyll', 'assets/v11/portal-unicorn.png']);
-const DEMO_DIRECTORIES = new Set(['assets', 'assets/v11']);
+const STUDIO_ASSETS = ['portal.webp', 'cofre.webp', 'auralink.webp', 'portraits.webp'];
+const DEMO_FILES = new Set(['index.html', 'demo.js', 'demo.css', '.nojekyll', 'assets/v11/portal-unicorn.png', ...STUDIO_ASSETS.map(name => `assets/v2/${name}`)]);
+const DEMO_DIRECTORIES = new Set(['assets', 'assets/v11', 'assets/v2']);
 
 /** Review existing output before writing: never silently ship or remove extra files. */
 export async function assertDemoOutput(output) {
@@ -49,11 +50,13 @@ export async function buildDemo({ root = resolve(dirname(fileURLToPath(import.me
     nodePaths: [join(dependencyRoot, 'node_modules')],
     plugins: [{ name: 'static-demo-shell-adapter', setup(builder) { builder.onLoad({ filter: /platform-v11\.js$/ }, async args => ({ contents: transformPlatformForDemo(await readFile(args.path, 'utf8')), loader: 'js' })); } }]
   });
-  const cssNames = ['styles.css', 'cofre.css', 'forocromos.css', 'care.css', 'platform-v11.css', 'demo/demo.css'];
+  const cssNames = ['styles.css', 'cofre.css', 'forocromos.css', 'care.css', 'platform-v11.css', 'demo/demo.css', 'demo/profile-studio.css', 'demo/cofre-studio.css', 'demo/guide-studio.css', 'demo/studio.css'];
   const css = await Promise.all(cssNames.map(name => readFile(join(root, name), 'utf8')));
   await writeFile(join(output, 'demo.css'), css.join('\n'));
   await copyFile(join(root, 'demo', 'index.html'), join(output, 'index.html'));
   await copyFile(join(root, 'assets', 'v11', 'portal-unicorn.png'), join(output, 'assets', 'v11', 'portal-unicorn.png'));
+  await mkdir(join(output, 'assets', 'v2'), { recursive: true });
+  for (const name of STUDIO_ASSETS) await copyFile(join(root, 'assets', 'v2', name), join(output, 'assets', 'v2', name));
   await writeFile(join(output, '.nojekyll'), '');
   return { output };
 }

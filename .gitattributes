@@ -8,3 +8,5 @@
 *.md text eol=lf
 *.png binary
 *.jpg binary
+# Frozen published output must retain its exact bytes on Windows and Linux.
+versions/v1/site/** -text -diff

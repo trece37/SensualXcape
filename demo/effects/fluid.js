@@ -64,8 +64,7 @@ export class SXFluid {
         : 'Fluido 2D: advección, presión y vorticidad; independiente de HIC.');
       this.ready = true;
       this._seedRibbon();
-    }
-
+}
     _status(mode, reason) {
       try { this.onStatus({mode, reason}); } catch (_) {}
     }
@@ -378,6 +377,3 @@ export class SXFluid {
       this.host.style.position = this.oldPosition;
     }
   }
-
-
-

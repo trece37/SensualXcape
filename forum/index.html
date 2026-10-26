@@ -156,6 +156,14 @@
     <div class="dialog-header"><div><p class="eyebrow">Tu cuenta de SensualXcape</p><h2 id="auth-heading">Qué bien encontrarte.</h2></div><button class="close-button" type="button" data-close-dialog aria-label="Cerrar acceso">×</button></div>
     <p class="dialog-description">Entra o crea tu cuenta. Después podrás solicitar la admisión al foro con tu alias.</p>
     <form id="auth-form" class="stack-form" method="post">
+      <section class="trial-access" aria-labelledby="trial-access-heading" aria-describedby="trial-access-help">
+        <h3 id="trial-access-heading">Prueba con el equipo</h3>
+        <p id="trial-access-help" class="field-help">Cuentas de ensayo. Elige tu nombre y escribe la contraseña que tienes para la prueba.</p>
+        <div class="trial-access-actions">
+          <button class="button button-secondary" type="button" data-trial-email="manel@yo.com">Manel</button>
+          <button class="button button-secondary" type="button" data-trial-email="walker@yo.com">Walker</button>
+        </div>
+      </section>
       <label for="auth-email">Correo electrónico</label>
       <input id="auth-email" name="email" type="email" autocomplete="username" maxlength="254" required placeholder="tu@correo.com">
       <label for="auth-password">Contraseña</label>

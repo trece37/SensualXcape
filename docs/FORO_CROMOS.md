@@ -6,6 +6,12 @@ La ruta del frontend es [SensualXcape /foro/](https://trece37.github.io/SensualX
 
 ## Qué hace
 
+El acceso incluye «Prueba con el equipo»: Manel y Walker seleccionan dos cuentas
+de ensayo, rellenando el correo y enfocando la contraseña. La clave no está
+incluida en el frontend. Estas cuentas se preparan manualmente desde Auth y se
+admiten con su rol en `fc_members`, sin cambiar la confirmación del registro general.
+Retirar estos accesos y reemplazar las cuentas de ensayo antes de abrir el foro al público.
+
 El foro permite solicitar acceso, leer y participar una vez admitida, buscar y guardar temas, editar el texto propio y retirar aportaciones. Moderación puede admitir o suspender miembros, fijar, cerrar u ocultar temas, ocultar respuestas y resolver avisos. Los temas cerrados quedan en lectura; una retirada redacta la aportación y no puede restaurarse desde moderación.
 
 Las personas externas y las cuentas pendientes o suspendidas no pueden leer la comunidad. Las aportaciones muestran alias. Los reportes de contenido y los avisos generales son confidenciales: sólo los consulta su autora activa o moderación. Un reporte no se publica ni genera una advertencia automática.

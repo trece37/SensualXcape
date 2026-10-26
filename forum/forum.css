@@ -314,6 +314,10 @@ button.topic-main, a.topic-main { display: block; border: 0; padding: 0; backgro
 .dialog-header + .stack-form { margin-top: 26px; }
 .dialog-footnote { margin-top: 22px; padding-top: 17px; border-top: 1px solid var(--line-soft); color: var(--subtle); font-size: 11px; line-height: 1.75; }
 .recover-button { justify-self: center; margin-top: 4px; font-size: 12px; }
+.trial-access { padding: 15px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--surface-raised); }
+.trial-access h3 { font-size: 14px; font-weight: 600; }
+.trial-access .field-help { margin-top: 7px; }
+.trial-access-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .wide-dialog { width: min(100% - 40px, 680px); }
 .manifesto-dialog { width: min(100% - 40px, 740px); }
 .manifesto-list { list-style: none; padding: 0; margin: 0; counter-reset: pact; }

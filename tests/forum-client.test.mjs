@@ -11,7 +11,7 @@ const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(resolv
 const first = { id: 'one', category: 'cuidado', title: 'PRIVATE TITLE ONE', body: 'PRIVATE BODY ONE', author_id: 'a', editorial: false, pinned: false, closed: false, hidden: false, withdrawn_at: null, created_at: '2026-10-26T12:00:00Z' };
 const second = { ...first, id: 'two', title: 'Second conversation', body: 'Second body', author_id: 'b' };
 
-function harness(t, { rpc, query, role = 'member' } = {}) {
+function harness(t, { rpc, query, auth = {}, role = 'member' } = {}) {
   const dom = new JSDOM(html, { url: 'https://example.invalid/foro/', pretendToBeVisual: true });
   const { window } = dom, document = window.document;
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
@@ -31,6 +31,7 @@ function harness(t, { rpc, query, role = 'member' } = {}) {
       getUser: async () => ({ data: { user: { id: actor } } }),
       signOut: async () => ({ error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      ...auth,
     },
     async rpc(name, args) {
       calls.push({ name, args, actor });
@@ -73,6 +74,32 @@ function harness(t, { rpc, query, role = 'member' } = {}) {
   t.after(() => { forum.destroy(); window.close(); });
   return { forum, document, window, records, people, calls, $, button, submit, login };
 }
+
+test('team trial buttons select the account and clear and focus the password without authenticating until form submission', async t => {
+  const authCalls = [];
+  const h = harness(t, { auth: {
+    signInWithPassword: async credentials => { authCalls.push({ method: 'login', credentials }); return { data: { session: null }, error: null }; },
+    signUp: async credentials => { authCalls.push({ method: 'signup', credentials }); return { data: {}, error: null }; },
+    resetPasswordForEmail: async email => { authCalls.push({ method: 'recover', email }); return { error: null }; },
+  } });
+  for (const [index, [name, email]] of [['Manel', 'manel@yo.com'], ['Walker', 'walker@yo.com']].entries()) {
+    h.$('#login-open').click();
+    const shortcut = h.button(name, h.$('#auth-dialog'));
+    assert.equal(shortcut.type, 'button');
+    h.$('#auth-password').value = 'previous-account-password';
+    h.$('#auth-password').setCustomValidity('Previous signup validation');
+    shortcut.click(); await flush();
+    assert.equal(h.$('#auth-email').value, email);
+    assert.equal(h.$('#auth-password').value, '');
+    assert.equal(h.$('#auth-password').validity.customError, false);
+    assert.equal(h.document.activeElement, h.$('#auth-password'));
+    assert.equal(authCalls.length, index);
+    h.$('#auth-password').value = `manually-entered-${name}`;
+    h.submit('#auth-form'); await flush();
+    assert.deepEqual(authCalls[index], { method: 'login', credentials: { email, password: `manually-entered-${name}` } });
+    assert.equal(authCalls.length, index + 1);
+  }
+});
 
 test('logout removes an open editor and all former topic text from DOM and form values', async t => {
   const h = harness(t); await h.login('a'); await h.forum.openTopic(first);

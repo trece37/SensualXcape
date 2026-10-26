@@ -333,6 +333,14 @@ export function createForum({ client, doc = document, win = window }) {
   bind('login-open', 'click', () => dialog('auth-dialog'));
   bind('preview-toggle', 'click', () => { $('forum-app').scrollIntoView?.({ behavior: win.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }); });
   for (const b of doc.querySelectorAll('[data-open-auth]')) b.addEventListener('click', () => dialog('auth-dialog'));
+  for (const b of doc.querySelectorAll('[data-trial-email]')) b.addEventListener('click', () => {
+    if (authBusy) return;
+    $('auth-email').value = b.dataset.trialEmail;
+    $('auth-password').value = '';
+    $('auth-password').setCustomValidity('');
+    say('auth-message', '');
+    $('auth-password').focus();
+  });
   bind('logout-button', 'click', async () => { clearPrivate(); session = null; member = null; epoch++; updateGate(); await refreshList(); await client.auth.signOut({ scope: 'local' }); });
   async function authenticate(mode) {
     const form = $('auth-form'); if (authBusy) return;

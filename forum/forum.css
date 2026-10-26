@@ -113,6 +113,17 @@ img { max-width: 100%; }
 .skip-link:focus { transform: none; }
 .page-shell { width: min(1424px, calc(100% - 72px)); margin-inline: auto; }
 .site-header { border-bottom: 1px solid var(--line-soft); background: color-mix(in srgb, var(--bg) 88%, transparent); }
+.notification-count { min-width: 20px; padding: 1px 4px; border-radius: 12px; background: var(--accent-strong); color: var(--accent-ink); font-size: 11px; }
+.notification-list { list-style: none; margin: 20px 0; padding: 0; }
+.notification-item { display: grid; gap: 6px; padding: 16px 12px; border-bottom: 1px solid var(--line-soft); overflow-wrap: anywhere; }
+.notification-item.unread { border-left: 3px solid var(--accent); background: var(--accent-tint); }
+.notification-item .text-button { justify-self: start; text-align: left; }
+.notification-actions { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.notification-settings { border-block: 1px solid var(--line); padding-block: 22px; margin-block: 22px; display: grid; gap: 12px; }
+.notification-settings .text-button { justify-self: start; text-align: left; }
+.notification-settings h4 { margin: 14px 0 0; }
+.notification-destination { font-size: 14px; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .header-nav .account-label { display: none; } #notifications-button { min-width: 44px; padding-inline: 7px; gap: 4px; } }
 .header-inner { min-height: 100px; width: min(1424px, calc(100% - 72px)); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; gap: 26px; }
 .brand { display: inline-flex; align-items: center; gap: 13px; text-decoration: none; flex-shrink: 0; }
 .brand-jewel { position: relative; display: grid; place-items: center; width: 42px; height: 47px; border: 1px solid var(--accent); border-radius: 40% 40% 43% 43%; box-shadow: inset 0 0 12px var(--ambient), 0 0 17px var(--ambient); font: italic 29px var(--heading); color: var(--accent); }

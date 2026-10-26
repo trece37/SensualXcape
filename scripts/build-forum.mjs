@@ -4,8 +4,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-export const FORUM_FILES = Object.freeze(['index.html', 'forum.js', 'forum.css', 'assets/portal.webp', 'assets/cofre.webp', 'assets/portal-unicorn.png']);
-export const FORUM_MIME = Object.freeze({ 'index.html': 'text/html; charset=utf-8', 'forum.js': 'text/javascript; charset=utf-8', 'forum.css': 'text/css; charset=utf-8', 'assets/portal.webp': 'image/webp', 'assets/cofre.webp': 'image/webp', 'assets/portal-unicorn.png': 'image/png' });
+export const FORUM_FILES = Object.freeze(['index.html', 'forum.js', 'forum.css', 'sw.js', 'manifest.webmanifest', 'icon.svg', 'assets/portal.webp', 'assets/cofre.webp', 'assets/portal-unicorn.png']);
+export const FORUM_MIME = Object.freeze({ 'index.html': 'text/html; charset=utf-8', 'forum.js': 'text/javascript; charset=utf-8', 'forum.css': 'text/css; charset=utf-8', 'sw.js': 'text/javascript; charset=utf-8', 'manifest.webmanifest': 'application/manifest+json', 'icon.svg': 'image/svg+xml', 'assets/portal.webp': 'image/webp', 'assets/cofre.webp': 'image/webp', 'assets/portal-unicorn.png': 'image/png' });
 
 export async function assertForumOutput(output) {
   let info; try { info = await lstat(output); } catch (e) { if (e.code === 'ENOENT') return; throw e; }
@@ -25,7 +25,7 @@ export async function buildForum({ root = rootDir, output = join(root, 'dist-pag
   await assertForumOutput(output); await mkdir(join(output, 'assets'), { recursive: true });
   const require = createRequire(join(dependencyRoot, 'package.json'));
   await require('esbuild').build({ entryPoints: [join(root, 'forum', 'forum.js')], outfile: join(output, 'forum.js'), bundle: true, format: 'esm', platform: 'browser', target: ['es2022'], minify: true, legalComments: 'inline', nodePaths: [join(dependencyRoot, 'node_modules')] });
-  for (const file of ['index.html', 'forum.css']) await copyFile(join(root, 'forum', file), join(output, file));
+  for (const file of ['index.html', 'forum.css', 'sw.js', 'manifest.webmanifest', 'icon.svg']) await copyFile(join(root, 'forum', file), join(output, file));
   for (const name of ['portal.webp', 'cofre.webp']) await copyFile(join(root, 'assets', 'v2', name), join(output, 'assets', name));
   await copyFile(join(root, 'assets', 'v11', 'portal-unicorn.png'), join(output, 'assets', 'portal-unicorn.png'));
   const bundle = await readFile(join(output, 'forum.js'), 'utf8');

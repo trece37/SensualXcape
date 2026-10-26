@@ -3,6 +3,7 @@ import { FORUM_CONFIG } from './config.js';
 import { CATEGORIES, SEED_TOPICS, PRINCIPLES } from './content.js';
 import { DEFAULT_STYLE, normalizeStyle, renderBody as styledBody, attachComposer, PROFILE_STAGES, describeProgress, normalizeAvatar } from './community.js';
 import { FILE_ACCEPT, fileSize, uploadReserved, removeReserved, downloadPrivate } from './files.js';
+import { createNotifications, notificationTopic } from './notifications.js';
 
 export function friendlyError(error) {
   const text = String(error?.message || error || '');
@@ -31,6 +32,7 @@ export function createForum({ client, doc = document, win = window }) {
   const drafts = new Map(), moderationPages = { members: 0, reports: 0, topics: 0, replies: 0 };
   const cards = new Map(), cardTimes = new Map(), staged = new Map(), styleDrafts = new Map(), objectUrls = new Map(), avatarLoads = new Map(), uploadsBusy = new Set();
   let visibleFiles = [], uploadPolicy = { attachment_limit: 950000, founder: false }, profileVersion = 0;
+  let following = false, pendingNotificationTopic = notificationTopic(win.location.href);
   const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
   const show = (id, yes) => { if ($(id)) $(id).hidden = !yes; };
   const say = (id, text) => { if ($(id)) { $(id).textContent = text; if (id === 'app-status') $(id).hidden = !text; } };
@@ -51,6 +53,7 @@ export function createForum({ client, doc = document, win = window }) {
   $('topic-body-input').before(topicComposer.element); $('reply-body').before(replyComposer.element);
   const topicUploads = uploadPanel(() => 'new-topic'), replyUploads = uploadPanel(() => current?.id);
   $('topic-body-input').after(topicUploads.element); $('reply-body').after(replyUploads.element);
+  const notices = createNotifications({ doc, win, client, rpc, capture, isActive: admitted, onOpenTopic: id => openTopic({ id }), errorText: friendlyError });
 
   function revokeUrls() {
     for (const value of objectUrls.values()) win.URL.revokeObjectURL(value);
@@ -179,6 +182,7 @@ export function createForum({ client, doc = document, win = window }) {
   function clearPrivate() {
     topics = []; aliases.clear(); saves.clear(); current = null; topicVersion++; listVersion++;
     cards.clear(); cardTimes.clear(); staged.clear(); styleDrafts.clear(); visibleFiles = []; profileVersion++; revokeUrls();
+    notices.reset(); following = false;
     uploadPolicy = { attachment_limit: 950000, founder: false }; uploadsBusy.clear(); topicComposer.reset(); replyComposer.reset(); topicUploads.clear(); replyUploads.clear();
     for (const id of ['topics-list', 'topic-posts', 'topic-body', 'topic-controls', 'moderation-list', 'topic-title', 'topic-author', 'topic-category', 'topic-status', 'reply-status', 'report-status']) $(id)?.replaceChildren();
     for (const id of ['topic-title-input', 'topic-body-input', 'reply-body', 'report-body', 'auth-password']) if ($(id)) $(id).value = '';
@@ -199,6 +203,7 @@ export function createForum({ client, doc = document, win = window }) {
     show('join-form', !!session && !member);
     show('forum-app', true); show('new-topic-button', active); show('moderation-button', moderator());
     show('profile-button', active); show('saved-toggle', active); show('report-open', active);
+    show('notifications-button', active);
     show('my-community-card', active); show('progression-button', active);
     if (member?.status === 'pending') say('join-message', 'Tu solicitud está pendiente de admisión. Puedes consultar aquí su estado.');
     else if (member?.status === 'suspended') say('join-message', 'Tu acceso a la comunidad está suspendido. Las conversaciones privadas no están disponibles.');
@@ -327,6 +332,12 @@ export function createForum({ client, doc = document, win = window }) {
     const controls = $('topic-controls'); controls.replaceChildren();
     if (admitted()) {
       controls.append(button(saves.has(topic.id) ? 'Quitar de guardados' : 'Guardar hilo', () => toggleSave(topic.id)));
+      controls.append(button(following ? 'Siguiendo · silenciar avisos' : 'Seguir este hilo', async () => {
+        try {
+          const result = await rpc('fc_follow_topic', { p_topic_id: topic.id, p_follow: !following });
+          if (current?.id === topic.id) { following = result.following; await openTopic(topic, { quiet: true }); }
+        } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') say('app-status', friendlyError(error)); }
+      }, 'text-button'));
       controls.append(button('Avisar a moderación', () => openReport(topic.id, null), 'text-button'));
       if (topic.author_id === session?.user.id && !topic.withdrawn_at) {
         if (!topic.closed) controls.append(button('Editar mi texto', () => editText('topic', topic), 'text-button'));
@@ -372,8 +383,10 @@ export function createForum({ client, doc = document, win = window }) {
       if (topicFiles.error) throw topicFiles.error; if (replyFiles.error) throw replyFiles.error;
       if (scope !== epoch || version !== topicVersion) return;
       const nextFiles = [...(topicFiles.data || []), ...(replyFiles.data || [])], allowedIds = new Set([...nextFiles.map(f => `media-${f.id}`), ...cards.values()].map(c => typeof c === 'string' ? c : c.avatar?.id).filter(Boolean));
+      const nextFollowing = await rpc('fc_is_following', { p_topic_id: topic.id });
+      if (scope !== epoch || version !== topicVersion) return;
       for (const [key, url] of objectUrls) if (!key.startsWith('download-') && !allowedIds.has(key)) { win.URL.revokeObjectURL(url); objectUrls.delete(key); if (key.startsWith('media-')) { close('media-dialog'); $('media-dialog')?.replaceChildren(); } }
-      visibleFiles = nextFiles;
+      visibleFiles = nextFiles; following = nextFollowing;
       replyCount = posts.count || 0; renderTopic(head.data, posts.data || []);
       if (!quiet) $('topic-title')?.focus();
     } catch (error) { if (scope === epoch && version === topicVersion) { if (expired(error)) expireAccess(); else say('app-status', friendlyError(error)); } }
@@ -436,7 +449,7 @@ export function createForum({ client, doc = document, win = window }) {
       } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') unusedStatus.textContent = friendlyError(error); }
     }
     unused.prepend(button('Revisar archivos pendientes', loadUnused, 'text-button'));
-    d.append(form, unused); d.addEventListener('close', () => { if (version === profileVersion) profileVersion++; composer.destroy(); }, { once: true }); d.showModal();
+    d.append(form, notices.settingsPanel(), unused); d.addEventListener('close', () => { if (version === profileVersion) profileVersion++; composer.destroy(); }, { once: true }); d.showModal();
     input.addEventListener('change', async () => {
       const file = input.files[0]; input.value = ''; if (!file || avatarBusy) return;
       avatarBusy = true; save.disabled = true; input.disabled = true; status.textContent = 'Preparando tu avatar…';
@@ -557,6 +570,7 @@ export function createForum({ client, doc = document, win = window }) {
         await hydrateSelf(); if (scope !== epoch) return;
       }
       if (changed || !admitted()) await refreshList(); else await refreshList({ quiet: true });
+      if (admitted() && pendingNotificationTopic) { const id = pendingNotificationTopic; pendingNotificationTopic = null; await openTopic({ id }); }
     } catch (error) { if (scope === epoch) { clearPrivate(); updateGate(); await refreshList(); say('join-message', friendlyError(error)); } }
   }
   async function hydrateSelf() {
@@ -566,6 +580,8 @@ export function createForum({ client, doc = document, win = window }) {
     if (!$('topic-body-input').value) topicComposer.setStyle(cards.get(actor));
     if (!$('reply-body').value) replyComposer.setStyle(cards.get(actor));
     topicUploads.render(); replyUploads.render(); renderSelf();
+    notices.sync().catch(error => { if (error.code !== 'FC_SESSION_CHANGED') say('app-status', 'El foro está conectado. No se pudo actualizar la campana; se intentará de nuevo.'); });
+    notices.restoreDevice();
   }
   const bind = (id, event, fn) => $(id)?.addEventListener(event, fn);
   bind('theme-select', 'change', () => { const theme = $('theme-select').value; doc.documentElement.dataset.theme = theme; doc.body.dataset.theme = theme; try { win.localStorage.setItem('sx-forum-theme', theme); } catch {} });
@@ -582,7 +598,7 @@ export function createForum({ client, doc = document, win = window }) {
     say('auth-message', '');
     $('auth-password').focus();
   });
-  bind('logout-button', 'click', async () => { clearPrivate(); session = null; member = null; epoch++; updateGate(); await refreshList(); await client.auth.signOut({ scope: 'local' }); });
+  bind('logout-button', 'click', async () => { notices.detachDevice().catch(() => {}); clearPrivate(); session = null; member = null; epoch++; updateGate(); await refreshList(); await client.auth.signOut({ scope: 'local' }); });
   async function authenticate(mode) {
     const form = $('auth-form'); if (authBusy) return;
     const email = $('auth-email').value.trim(), password = $('auth-password').value;
@@ -646,7 +662,11 @@ export function createForum({ client, doc = document, win = window }) {
       if (scope !== epoch) return;
       if (r.data?.status !== member?.status || r.data?.role !== member?.role) { epoch++; clearPrivate(); member = r.data; updateGate(); if (admitted()) await hydrateSelf(); }
       else { member = r.data; updateGate(); }
-      if (admitted()) { await refreshList({ quiet: true }); if (current) await openTopic(current, { quiet: true }); } else await refreshList();
+      if (admitted()) {
+        await refreshList({ quiet: true }); if (current) await openTopic(current, { quiet: true });
+        await notices.sync();
+        if (pendingNotificationTopic) { const id = pendingNotificationTopic; pendingNotificationTopic = null; await openTopic({ id }); }
+      } else await refreshList();
     } catch (error) { if (scope === epoch) { if (expired(error)) expireAccess(); else say('app-status', friendlyError(error)); } } finally { busy = false; }
   }
   win.addEventListener('offline', () => say('app-status', 'Sin conexión. Conserva tu texto y vuelve a intentar cuando recuperes Internet.'));
@@ -665,7 +685,7 @@ export function createForum({ client, doc = document, win = window }) {
   }
   const interval = win.setInterval(poll, 20000);
   client.auth.getSession().then(({ data, error }) => { if (error) say('app-status', friendlyError(error)); else if (data.session && !session) syncSession(data.session); });
-  return { refreshList, syncSession, openTopic, destroy() { destroyed = true; epoch++; revokeUrls(); topicComposer.destroy(); replyComposer.destroy(); win.clearInterval(interval); subscription.unsubscribe(); }, getState: () => ({ member, topics, current, preview }) };
+  return { refreshList, syncSession, openTopic, destroy() { destroyed = true; epoch++; revokeUrls(); notices.destroy(); topicComposer.destroy(); replyComposer.destroy(); win.clearInterval(interval); subscription.unsubscribe(); }, getState: () => ({ member, topics, current, preview }) };
 }
 
 if (typeof document !== 'undefined' && document.getElementById('auth-form')) {

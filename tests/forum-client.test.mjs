@@ -11,7 +11,7 @@ const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(resolv
 const first = { id: 'one', category: 'cuidado', title: 'PRIVATE TITLE ONE', body: 'PRIVATE BODY ONE', author_id: 'a', editorial: false, pinned: false, closed: false, hidden: false, withdrawn_at: null, created_at: '2026-10-26T12:00:00Z' };
 const second = { ...first, id: 'two', title: 'Second conversation', body: 'Second body', author_id: 'b' };
 
-function harness(t, { rpc, query, auth = {}, role = 'member', storage = {}, policy = { attachment_limit: 950000, founder: false }, profileQuery } = {}) {
+function harness(t, { rpc, query, auth = {}, role = 'member', storage = {}, policy = { attachment_limit: 950000, founder: false }, profileQuery, pushSupport = false } = {}) {
   const dom = new JSDOM(html, { url: 'https://example.invalid/foro/', pretendToBeVisual: true });
   const { window } = dom, document = window.document;
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
@@ -20,6 +20,13 @@ function harness(t, { rpc, query, auth = {}, role = 'member', storage = {}, poli
   const revoked = []; let urlId = 0;
   window.URL.createObjectURL = () => `blob:private-${++urlId}`;
   window.URL.revokeObjectURL = url => revoked.push(url);
+  if(pushSupport){
+    window.PushManager=class{};window.Notification={permission:'granted'};
+    window.MessageChannel=class{constructor(){this.port1={onmessage:null,close(){}};this.port2={postMessage:data=>queueMicrotask(()=>this.port1.onmessage?.({data}))};}};
+    const subscription={endpoint:'https://fcm.googleapis.com/fcm/send/private-test',unsubscribe:async()=>true};
+    const registration={active:{postMessage:(_,ports)=>ports[0].postMessage({ok:true})},pushManager:{getSubscription:async()=>subscription}};
+    Object.defineProperty(window.navigator,'serviceWorker',{value:{getRegistration:async()=>registration,addEventListener(){},removeEventListener(){}}});
+  }
   const people = new Map([
     ['a', { user_id: 'a', alias: 'Alias A', status: 'active', role }],
     ['b', { user_id: 'b', alias: 'Alias B', status: 'active', role: 'member' }],
@@ -49,6 +56,11 @@ function harness(t, { rpc, query, auth = {}, role = 'member', storage = {}, poli
         return { data: args.p_ids.map(id => people.get(id)).filter(p => p?.status === 'active').map(p => ({ created_at: first.created_at, topic_count: records.fc_topics.filter(row => row.author_id === p.user_id).length, reply_count: records.fc_replies.filter(row => row.author_id === p.user_id).length, active_days: 1, ...structuredClone(p) })), error: null };
       }
       if (name === 'fc_my_files') return { data: records.fc_files.filter(f => f.owner_id === actor && f.status !== 'linked'), error: null };
+      if (name === 'fc_notifications') return {data:{items:[],unread_count:0,has_more:false,next_before:null,next_before_id:null},error:null};
+      if (name === 'fc_notification_settings') return {data:{email_enabled:false,email:null,email_verified:false,deliveryConfigured:false},error:null};
+      if (name === 'fc_push_settings') return {data:{configured:false,public_key:null},error:null};
+      if (name === 'fc_push_status') return {data:{registered:true,id:'11111111-1111-4111-8111-111111111111'},error:null};
+      if (name === 'fc_is_following') return {data:false,error:null};
       if (rpc) return rpc(name, args, actor);
       return { data: { ok: true }, error: null };
     },
@@ -368,4 +380,11 @@ test('a late reply in another topic keeps the current topic staged attachments v
   assert.match(h.$('#reply-form .staged-files').textContent,/DRAFT-FOR-B/);
   h.$('#reply-body').value='ANSWER FOR B';h.submit('#reply-form');await flush();
   assert.deepEqual(h.calls.filter(c=>c.name==='fc_publish').at(-1).args.p_files,['file-b']);
+});
+
+test('logout clears private content immediately even when device unregistration never finishes',async t=>{
+ const late=deferred(),h=harness(t,{pushSupport:true,rpc:name=>name==='fc_unregister_push'?late.promise:Promise.resolve({data:{},error:null})});
+ await h.login('a');await flush();await h.forum.openTopic(first);h.$('#logout-button').click();await flush();
+ assert.equal(h.forum.getState().member,null);assert.equal(h.$('#topic-view').hidden,true);assert.doesNotMatch(h.document.body.textContent,/PRIVATE BODY/);
+ assert.ok(h.calls.some(call=>call.name==='fc_unregister_push'));late.resolve({data:{ok:true},error:null});await flush();
 });

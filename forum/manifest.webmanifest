@@ -1,0 +1,12 @@
+{
+  "id": "./",
+  "name": "Foro Cromos · SensualXcape",
+  "short_name": "Foro Cromos",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#140d15",
+  "theme_color": "#140d15",
+  "icons": [{"src":"./icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]
+}

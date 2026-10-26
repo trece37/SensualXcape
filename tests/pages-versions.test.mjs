@@ -31,8 +31,8 @@ test('the Pages build keeps root V1 byte-for-byte and places the current app onl
   const v1 = await readFile(join(output, 'index.html'), 'utf8');
   const v2 = await readFile(join(output, 'v2', 'index.html'), 'utf8');
   assert.notEqual(v1, v2);
-  assert.match(v2, /src="\.\/demo\.js\?v=live-20261026"/u);
-  assert.match(v2, /href="\.\/demo\.css\?v=live-20261026"/u);
+  assert.match(v2, /src="\.\/demo\.js\?v=live-[a-f0-9]{12}"/u);
+  assert.match(v2, /href="\.\/demo\.css\?v=live-[a-f0-9]{12}"/u);
   assert.match(v2, /connect-src 'self' https:\/\/oorheeyyahpyiarwktbq\.supabase\.co/u);
   const demo = await readFile(join(output, 'demo', 'index.html'), 'utf8');
   assert.match(demo, /connect-src 'none'/u);

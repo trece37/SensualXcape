@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { buildDemo } from './build-demo.mjs';
 
 export function transformPlatformForLive(source) {
@@ -19,8 +20,10 @@ export async function buildLive(options) {
     .replace('data-static-demo="true"', 'data-live-site="true"')
     .replace('<title>SensualXcape · Demo interactiva</title>', '<title>SensualXcape · Tu espacio privado</title>')
     .replace('SensualXcape: un universo propio. Maqueta navegable con tres atmósferas, perfil, Cofre y servicios. Tus aportaciones permanecen solo en memoria de la pestaña.', 'SensualXcape: tu perfil, tus conversaciones privadas y Foro Cromos. Tu espacio, tus decisiones.')
-    .replace('./demo.js"', './demo.js?v=live-20261026"').replace('./demo.css"', './demo.css?v=live-20261026"');
-  await writeFile(join(output, 'index.html'), html);
+    ;
   await writeFile(join(output, 'demo.css'), `${await readFile(join(output, 'demo.css'), 'utf8')}\n${await readFile(join(root, 'demo', 'live.css'), 'utf8')}`);
+  const fingerprint=async name=>createHash('sha256').update(await readFile(join(output,name))).digest('hex').slice(0,12);
+  html=html.replace('./demo.js"',`./demo.js?v=live-${await fingerprint('demo.js')}"`).replace('./demo.css"',`./demo.css?v=live-${await fingerprint('demo.css')}"`);
+  await writeFile(join(output,'index.html'),html);
   return result;
 }

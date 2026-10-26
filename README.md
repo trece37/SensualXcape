@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://trece37.github.io/SensualXcape/v2/"><strong>✨ ABRIR SENSUALXCAPE V2</strong></a>
+  &nbsp; · &nbsp; <a href="https://trece37.github.io/SensualXcape/foro/"><strong>Foro Cromos · comunidad privada</strong></a>
   &nbsp; · &nbsp; <a href="https://trece37.github.io/SensualXcape/">Conservar la V1 original</a>
   &nbsp; · &nbsp; <a href="#tres-atmósferas-una-misma-experiencia">Ver los estilos</a>
   &nbsp; · &nbsp; <a href="docs/DESARROLLO.md">Guía de desarrollo</a>
@@ -21,6 +22,11 @@
 ---
 
 ## Un producto con un propósito
+
+Foro Cromos añade una comunidad conectada a Supabase, con cuenta, admisión propia,
+conversaciones persistentes, guardados y moderación. La interfaz está bajo `/foro/`;
+V1 y V2 conservan sus demostraciones independientes. Consulta el
+[alcance y estado del foro](docs/FORO_CROMOS.md) antes de abrir un piloto.
 
 SensualXcape se construye para mujeres adultas que ejercen la prostitución: un espacio para organizarse, conectar entre compañeras y elegir qué compartir, con quién y cuándo. El producto parte de necesidades reales, autonomía y utilidad cotidiana.
 

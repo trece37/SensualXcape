@@ -8,6 +8,7 @@ local-data/
 .env.*
 !.env.example
 config.js
+!/forum/config.js
 *.log
 *.pem
 *.key

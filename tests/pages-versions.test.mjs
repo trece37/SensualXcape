@@ -35,6 +35,13 @@ test('the Pages build keeps root V1 byte-for-byte and places the current app onl
   assert.match(v2, /href="\.\/demo\.css"/u);
   assert.match(v2, /connect-src 'none'/u);
   assert.deepEqual(await readFile(join(output, 'v2', 'assets', 'v2', 'cofre-closed.png')), await readFile(join(root, 'assets', 'v2', 'cofre-closed.png')));
+  const forum = await readFile(join(output, 'foro', 'index.html'), 'utf8');
+  assert.match(forum, /connect-src https:\/\/oorheeyyahpyiarwktbq\.supabase\.co wss:\/\/oorheeyyahpyiarwktbq\.supabase\.co/u);
+  assert.match(forum, /src="\.\/forum\.js"/u);
+  assert.match(v2, /href="\.\.\/foro\/"/u);
+  const forumBundle = await readFile(join(output, 'foro', 'forum.js'), 'utf8');
+  assert.match(forumBundle, /sb_publishable_/u);
+  assert.doesNotMatch(forumBundle, /sb_secret_|SUPABASE_SERVICE_ROLE_KEY/u);
   // Rebuilding V2 must not transform or annotate the preserved root.
   await buildPages({ root, output });
   assert.deepEqual(await readFile(join(output, 'index.html')), await readFile(join(root, 'versions', 'v1', 'site', 'index.html')));
@@ -57,6 +64,13 @@ test('unknown v2 output is also rejected before the preserved root is copied', a
   await writeFile(join(contaminated, 'v2', 'config.js'), 'private fixture');
   await assert.rejects(buildPages({ root, output: contaminated }), /unexpected or linked file config\.js/u);
   assert.equal(await readFile(join(contaminated, 'index.html'), 'utf8'), 'existing root sentinel');
+  const forumOutput = await mkdtemp(join(tmpdir(), 'sx-pages-forum-'));
+  t.after(() => rm(forumOutput, { recursive: true, force: true }));
+  await mkdir(join(forumOutput, 'foro'), { recursive: true });
+  await writeFile(join(forumOutput, 'index.html'), 'forum root sentinel');
+  await writeFile(join(forumOutput, 'foro', 'config.js'), 'private fixture');
+  await assert.rejects(buildPages({ root, output: forumOutput }), /Unexpected forum file: config\.js/u);
+  assert.equal(await readFile(join(forumOutput, 'index.html'), 'utf8'), 'forum root sentinel');
 });
 
 test('a changed V1 byte fails verification rather than silently redefining the preserved version', async t => {

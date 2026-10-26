@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="es" data-theme="noir">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://oorheeyyahpyiarwktbq.supabase.co wss://oorheeyyahpyiarwktbq.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta name="description" content="Foro Cromos, la comunidad profesional privada de SensualXcape. Un espacio entre compañeras, con voz propia.">
+  <title>Foro Cromos · Entre nosotras · SensualXcape</title>
+  <link rel="stylesheet" href="./forum.css">
+  <script type="module" src="./forum.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="../v2/" aria-label="SensualXcape, volver al inicio">
+        <span class="brand-jewel" aria-hidden="true">S</span>
+        <span class="brand-word">Sensual<span>X</span>cape<small>Un espacio propio</small></span>
+      </a>
+      <nav class="header-nav" aria-label="Navegación principal">
+        <span class="current-space"><span aria-hidden="true">◇</span> Foro Cromos</span>
+        <div class="theme-control">
+          <label for="theme-select">Atmósfera</label>
+          <select id="theme-select" name="theme">
+            <option value="noir">Noir</option>
+            <option value="agape">Ágape</option>
+            <option value="eros">Eros</option>
+          </select>
+        </div>
+        <span id="account-label" class="account-label" hidden></span>
+        <button id="profile-button" class="button button-quiet button-small" type="button" hidden>Cambiar alias</button>
+        <button id="login-open" class="button button-small" type="button">Entrar <span aria-hidden="true">↗</span></button>
+        <button id="logout-button" class="button button-quiet button-small" type="button" hidden>Salir</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content" class="page-shell">
+    <section class="forum-hero jewel-frame" aria-labelledby="forum-heading">
+      <div class="hero-art" aria-hidden="true"></div>
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="tiny-diamond" aria-hidden="true"></span> Comunidad profesional · Acceso privado</p>
+        <h1 id="forum-heading">Foro Cromos<span class="title-dot">.</span></h1>
+        <p class="hero-subtitle">Entre nosotras,<br><em>con voz propia.</em></p>
+        <p class="hero-description">El oficio, las rutas, los límites y la vida que sigue después. Un lugar para preguntar, compartir y escucharnos entre compañeras.</p>
+        <div class="hero-actions">
+          <a class="button" href="#join-panel">Tu lugar en la conversación <span aria-hidden="true">↗</span></a>
+          <button id="preview-toggle" class="text-button" type="button" aria-controls="forum-app" aria-expanded="false">Explorar los temas <span aria-hidden="true">↓</span></button>
+        </div>
+      </div>
+      <div class="hero-signature"><span aria-hidden="true">✦</span> Tu experiencia cuenta. Tú decides qué compartir.</div>
+    </section>
+
+    <p id="app-status" class="status-banner" role="status" aria-live="polite" hidden></p>
+
+    <section id="join-panel" class="join-panel surface" aria-labelledby="join-heading">
+      <div class="join-intro">
+        <p class="eyebrow">La puerta de entrada</p>
+        <h2 id="join-heading">Un alias.<br> Tu propia voz.</h2>
+        <p>Foro Cromos es una comunidad privada para mujeres adultas que ejercen la prostitución. La cuenta y la admisión son dos pasos distintos.</p>
+        <div class="join-actions">
+          <button class="button" type="button" data-open-auth>Entrar o crear mi cuenta <span aria-hidden="true">↗</span></button>
+          <span class="small-copy">Tu correo no es tu nombre en el foro.</span>
+        </div>
+      </div>
+      <div class="join-detail">
+        <ol class="entry-steps">
+          <li><span class="step-number">01</span><div><strong>Crea tu cuenta</strong><p>Con tu correo y una contraseña. Confirma el correo si se te solicita.</p></div></li>
+          <li><span class="step-number">02</span><div><strong>Elige cómo te llamamos</strong><p>Un alias para participar, sin publicar tu nombre personal.</p></div></li>
+          <li><span class="step-number">03</span><div><strong>Solicita tu entrada</strong><p>El equipo revisa la solicitud. Cuando esté aceptada, podrás leer y participar.</p></div></li>
+        </ol>
+        <form id="join-form" class="stack-form admission-form" method="post" hidden>
+          <label for="join-alias">Tu alias en el foro</label>
+          <input id="join-alias" name="alias" autocomplete="nickname" minlength="2" maxlength="36" required placeholder="Cómo quieres que te llamemos">
+          <label class="checkbox-label"><input id="join-adult" name="adult" type="checkbox" required> <span>Confirmo que tengo 18 años o más.</span></label>
+          <label class="checkbox-label"><input id="join-professional" name="professional" type="checkbox" required> <span>Soy una mujer que ejerce la prostitución y solicito entrar en esta comunidad profesional.</span></label>
+          <p class="field-help">No pedimos documentos ni fotografías en este formulario. La solicitud no garantiza la admisión.</p>
+          <button class="button" type="submit">Solicitar mi entrada <span aria-hidden="true">↗</span></button>
+        </form>
+        <p id="join-message" class="form-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="forum-app" class="forum-layout" aria-label="Foro privado" hidden>
+      <aside class="forum-sidebar">
+        <div class="sidebar-block surface">
+          <p class="eyebrow">Encuentra tu conversación</p>
+          <h2 class="sidebar-title">Los espacios</h2>
+          <nav id="category-list" class="category-list" aria-label="Filtrar temas por categoría"></nav>
+          <div class="sidebar-bottom">
+            <button id="saved-toggle" class="saved-toggle" type="button" aria-pressed="false"><span aria-hidden="true">☆</span> Mis guardados</button>
+            <button id="report-open" class="saved-toggle" type="button"><span aria-hidden="true">◇</span> Aviso confidencial</button>
+            <button id="moderation-button" class="saved-toggle" type="button" hidden><span aria-hidden="true">✦</span> Moderación</button>
+          </div>
+        </div>
+        <div class="sidebar-note">
+          <span class="note-glyph" aria-hidden="true">◇</span>
+          <h3>El respeto abre espacio.</h3>
+          <p>Tu experiencia tiene valor. La de otra compañera puede ser distinta. Compartir es una elección.</p>
+        </div>
+      </aside>
+
+      <div class="forum-content">
+        <section id="list-view" class="reading-surface" aria-labelledby="conversation-heading">
+          <div class="section-heading forum-list-heading">
+            <div><p id="live-label" class="eyebrow">Temas de apertura · Equipo editorial</p><h2 id="conversation-heading">Entre compañeras</h2><p id="list-summary" class="list-summary">Elige una conversación o abre la tuya.</p></div>
+            <button id="new-topic-button" class="button" type="button"><span aria-hidden="true">＋</span> Nuevo tema</button>
+          </div>
+          <div class="forum-toolbar">
+            <label class="search-field" for="search-input"><span aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Buscar una conversación" autocomplete="off" maxlength="160"><span class="sr-only">Buscar temas</span></label>
+            <div class="sort-field"><label for="sort-select">Ordenar</label><select id="sort-select"><option value="recent">Más recientes</option><option value="pinned">Destacados primero</option></select></div>
+          </div>
+          <div class="list-caption"><span>Conversaciones</span><span>Un lugar para tu experiencia</span></div>
+          <div id="topics-list" class="topics-list" aria-live="polite"></div>
+        </section>
+
+        <section id="topic-view" class="reading-surface topic-view" aria-labelledby="topic-title" hidden>
+          <button id="back-topics" class="text-button back-button" type="button"><span aria-hidden="true">←</span> Volver a las conversaciones</button>
+          <article class="topic-article">
+            <p id="topic-category" class="eyebrow"></p>
+            <h2 id="topic-title" tabindex="-1"></h2>
+            <p id="topic-author" class="post-byline"></p>
+            <div id="topic-body" class="prose"></div>
+            <div id="topic-controls" class="topic-controls"></div>
+          </article>
+          <p id="topic-status" class="form-status" role="status" aria-live="polite"></p>
+          <section class="replies-section" aria-labelledby="replies-heading"><h3 id="replies-heading">La conversación</h3><div id="topic-posts" class="topic-posts"></div></section>
+          <form id="reply-form" class="stack-form reply-form" method="post">
+            <label for="reply-body">Tu voz en esta conversación</label>
+            <textarea id="reply-body" name="body" rows="5" minlength="2" maxlength="3000" required placeholder="Comparte lo que te apetezca aportar…"></textarea>
+            <p class="field-help">Escribes con tu alias. Evita datos que identifiquen o localicen a otra persona.</p>
+            <div class="form-footer"><p id="reply-status" class="form-status" role="status" aria-live="polite"></p><button class="button" type="submit">Publicar respuesta <span aria-hidden="true">↗</span></button></div>
+          </form>
+        </section>
+
+        <section id="moderation-panel" class="surface moderation-panel" aria-labelledby="moderation-heading" hidden>
+          <div class="section-heading"><div><p class="eyebrow">Solo moderación</p><h2 id="moderation-heading">Solicitudes y revisión</h2></div></div>
+          <p class="section-description">Revisa cada solicitud y los reportes privados antes de decidir.</p>
+          <div id="moderation-list" class="moderation-list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="pact-strip" aria-label="Nuestros principios">
+      <div class="pact-mark" aria-hidden="true">✦</div>
+      <div><p class="eyebrow">La forma también importa</p><p>Un espacio propio se construye con respeto,<br class="desktop-break"> criterio y algo que merezca la pena compartir.</p></div>
+      <button id="open-manifesto" class="text-button" type="button">Nuestro pacto <span aria-hidden="true">↗</span></button>
+    </section>
+  </main>
+
+  <footer class="site-footer page-shell"><a class="footer-brand" href="../v2/">SensualXcape</a><p>Foro Cromos · Comunidad profesional privada · Solo mayores de 18 años</p><span>Tu espacio, a tu manera.</span></footer>
+
+  <dialog id="auth-dialog" class="forum-dialog" aria-labelledby="auth-heading">
+    <div class="dialog-header"><div><p class="eyebrow">Tu cuenta de SensualXcape</p><h2 id="auth-heading">Qué bien encontrarte.</h2></div><button class="close-button" type="button" data-close-dialog aria-label="Cerrar acceso">×</button></div>
+    <p class="dialog-description">Entra o crea tu cuenta. Después podrás solicitar la admisión al foro con tu alias.</p>
+    <form id="auth-form" class="stack-form" method="post">
+      <label for="auth-email">Correo electrónico</label>
+      <input id="auth-email" name="email" type="email" autocomplete="username" maxlength="254" required placeholder="tu@correo.com">
+      <label for="auth-password">Contraseña</label>
+      <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" maxlength="128" required placeholder="Tu contraseña">
+      <p id="auth-message" class="form-status" role="status" aria-live="polite"></p>
+      <button class="button button-full" type="submit">Entrar <span aria-hidden="true">↗</span></button>
+      <button class="button button-secondary button-full" type="button" data-auth-action="signup">Crear una cuenta</button>
+      <button class="text-button recover-button" type="button" data-auth-action="recover">He olvidado mi contraseña</button>
+    </form>
+    <p class="dialog-footnote">Tu cuenta es personal. La entrada al foro requiere una solicitud aceptada.</p>
+  </dialog>
+
+  <dialog id="topic-dialog" class="forum-dialog wide-dialog" aria-labelledby="new-topic-heading">
+    <div class="dialog-header"><div><p class="eyebrow">Abre la conversación</p><h2 id="new-topic-heading">Un tema con tu voz.</h2></div><button class="close-button" type="button" data-close-dialog aria-label="Cerrar nuevo tema">×</button></div>
+    <form id="topic-form" class="stack-form" method="post">
+      <label for="topic-category-input">El espacio más adecuado</label><select id="topic-category-input" name="category" required></select>
+      <label for="topic-title-input">Un título que cuente de qué va</label><input id="topic-title-input" name="title" minlength="5" maxlength="120" required placeholder="¿Qué quieres compartir o preguntar?">
+      <label for="topic-body-input">Tu mensaje</label><textarea id="topic-body-input" name="body" rows="8" minlength="10" maxlength="5000" required placeholder="Cuéntalo a tu manera…"></textarea>
+      <p class="field-help">Evita nombres, teléfonos, fotos o ubicaciones de otras personas. Para un hecho que necesite revisión, utiliza el reporte privado.</p>
+      <div class="form-footer"><p id="topic-form-status" class="form-status" role="status" aria-live="polite"></p><button class="button" type="submit">Publicar tema <span aria-hidden="true">↗</span></button></div>
+    </form>
+  </dialog>
+
+  <dialog id="report-dialog" class="forum-dialog" aria-labelledby="report-heading">
+    <div class="dialog-header"><div><p class="eyebrow">Para el equipo de moderación</p><h2 id="report-heading">Reportar en privado.</h2></div><button class="close-button" type="button" data-close-dialog aria-label="Cerrar reporte privado">×</button></div>
+    <p class="dialog-description">Explica el hecho y qué necesita revisión. El reporte se envía al equipo de moderación; no se publica como respuesta en el hilo.</p>
+    <form id="report-form" class="stack-form" method="post"><label for="report-body">Qué quieres comunicar</label><textarea id="report-body" name="body" rows="7" minlength="10" maxlength="1000" required placeholder="Describe lo ocurrido y lo que puedas precisar…"></textarea><p class="field-help">Incluye solo la información necesaria. Este canal no es un servicio de emergencias ni promete una respuesta inmediata.</p><p id="report-status" class="form-status" role="status" aria-live="polite"></p><button class="button" type="submit">Enviar a moderación <span aria-hidden="true">↗</span></button></form>
+  </dialog>
+
+  <dialog id="manifesto-dialog" class="forum-dialog manifesto-dialog" aria-labelledby="manifesto-heading">
+    <div class="dialog-header"><div><p class="eyebrow">SensualXcape · Nuestro pacto</p><h2 id="manifesto-heading">Para lo que construimos juntas.</h2></div><button class="close-button" type="button" data-close-dialog aria-label="Cerrar nuestro pacto">×</button></div>
+    <p class="dialog-description">Diez principios para cuidar el propósito, escuchar y aportar utilidad. Tú decides qué compartes y qué camino quieres seguir.</p>
+    <ol id="manifesto-list" class="manifesto-list"></ol>
+  </dialog>
+
+  <noscript><p class="noscript-message">Activa JavaScript para entrar en tu cuenta y utilizar el foro. No se puede iniciar sesión ni publicar con los scripts desactivados.</p></noscript>
+</body>
+</html>

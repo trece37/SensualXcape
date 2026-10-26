@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { FORUM_MIME } from './build-forum.mjs';
 
 // The normal preview remains the current V2 candidate for the phone-review tool.
 // --pages previews the exact multi-version artifact which will be deployed.
@@ -24,7 +25,11 @@ const server = createServer(async (request, response) => {
   if (relative !== null && pages) {
     output = 'dist-pages';
     if (relative === 'v2') { response.writeHead(302, { Location: '/SensualXcape/v2/' }); response.end(); return; }
-    if (relative.startsWith('v2/')) {
+    if (relative === 'foro') { response.writeHead(302, { Location: '/SensualXcape/foro/' }); response.end(); return; }
+    if (relative.startsWith('foro/')) {
+      const path = relative.slice(5) || 'index.html';
+      if (FORUM_MIME[path]) entry = [`foro/${path}`, FORUM_MIME[path]];
+    } else if (relative.startsWith('v2/')) {
       const v2 = files.get(relative.slice(3));
       if (v2) entry = [`v2/${v2[0]}`, v2[1]];
     } else if (v1Paths.has(relative)) entry = files.get(relative);

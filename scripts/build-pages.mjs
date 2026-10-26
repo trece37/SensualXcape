@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildDemo, assertDemoOutput } from './build-demo.mjs';
+import { buildForum, assertForumOutput } from './build-forum.mjs';
 
 export const V1_SOURCE_COMMIT = '1a645827aa5c5b92b998a5373810bdfd3a4dbfbb';
 export const V1_FILES = Object.freeze(['.nojekyll', 'assets/v11/portal-unicorn.png', 'demo.css', 'demo.js', 'index.html']);
@@ -50,7 +51,10 @@ export async function assertPagesOutput(output) {
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       const absolute = join(directory, entry.name), info = await lstat(absolute);
       if (info.isSymbolicLink()) throw new Error(`Review Pages output: symbolic link ${relative}`);
-      if (relative === 'v2') {
+      if (relative === 'foro') {
+        if (!info.isDirectory()) throw new Error('Pages forum output must be an ordinary directory.');
+        await assertForumOutput(absolute);
+      } else if (relative === 'v2') {
         if (!info.isDirectory()) throw new Error('Pages v2 output must be an ordinary directory.');
         await assertDemoOutput(absolute);
       } else if (info.isDirectory()) {
@@ -75,6 +79,7 @@ export async function buildPages({ root = projectRoot, output = join(root, 'dist
   }
   const v2Output = join(output, 'v2');
   await buildDemo({ root, output: v2Output, dependencyRoot });
+  await buildForum({ root, output: join(output, 'foro'), dependencyRoot });
   // Recheck destination bytes too: no transform, banner or selector may alter V1.
   for (const relative of frozen.files) {
     const bytes = await readFile(join(output, relative));

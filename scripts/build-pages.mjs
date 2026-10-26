@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildDemo, assertDemoOutput } from './build-demo.mjs';
 import { buildForum, assertForumOutput } from './build-forum.mjs';
+import { buildLive } from './build-live.mjs';
 
 export const V1_SOURCE_COMMIT = '1a645827aa5c5b92b998a5373810bdfd3a4dbfbb';
 export const V1_FILES = Object.freeze(['.nojekyll', 'assets/v11/portal-unicorn.png', 'demo.css', 'demo.js', 'index.html']);
@@ -54,7 +55,7 @@ export async function assertPagesOutput(output) {
       if (relative === 'foro') {
         if (!info.isDirectory()) throw new Error('Pages forum output must be an ordinary directory.');
         await assertForumOutput(absolute);
-      } else if (relative === 'v2') {
+      } else if (relative === 'v2' || relative === 'demo') {
         if (!info.isDirectory()) throw new Error('Pages v2 output must be an ordinary directory.');
         await assertDemoOutput(absolute);
       } else if (info.isDirectory()) {
@@ -78,7 +79,8 @@ export async function buildPages({ root = projectRoot, output = join(root, 'dist
     await copyFile(join(frozen.site, relative), destination);
   }
   const v2Output = join(output, 'v2');
-  await buildDemo({ root, output: v2Output, dependencyRoot });
+  await buildLive({ root, output: v2Output, dependencyRoot });
+  await buildDemo({ root, output: join(output, 'demo'), dependencyRoot });
   await buildForum({ root, output: join(output, 'foro'), dependencyRoot });
   // Recheck destination bytes too: no transform, banner or selector may alter V1.
   for (const relative of frozen.files) {

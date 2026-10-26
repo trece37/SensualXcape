@@ -5,9 +5,10 @@ const MAX_PHOTOS = 6, MAX_BYTES = 8 * 1024 * 1024;
 const TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /** A memory-only studio. The only external disclosure is an explicit onPublish snapshot. */
-export function createProfileView({ documentRef = document, windowRef = window, onInfo = () => {}, notify = () => {}, onPublish = () => {}, confirmAction = async () => false } = {}) {
+export function createProfileView({ documentRef = document, windowRef = window, onInfo = () => {}, notify = () => {}, onPublish = () => {}, confirmAction = async () => false, persistence = null } = {}) {
   const d = documentRef, w = windowRef, prefix = `sx-profile-${++instance}`;
   const cleanup = []; let photos = [], activeId = '', coverId = '', sequence = 0, published = null, savedTexts = null, destroyed = false, confirming = false, stateVersion = 0;
+  let liveBusy = false;
   const el = (tag, cls, text) => { const node = d.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
   const icon = nodes => {
     const svg = d.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -45,10 +46,12 @@ export function createProfileView({ documentRef = document, windowRef = window, 
   textDraft.append(textActions, el('p', 'sx-profile-draft-duration', 'Hasta que recargues o cierres esta página'), textStatus); publicPanel.append(textDraft);
   listen(saveTexts, 'click', () => {
     if (destroyed) return;
+    if (persistence) { runLive(() => persistence.saveDraft(getDraft()), 'Borrador guardado en tu cuenta. No se ha compartido.'); return; }
     savedTexts = { privateAlias: privateAlias.value, privateBio: privateBio.value, publicAlias: publicAlias.value, publicBio: publicBio.value };
     recoverTexts.disabled = false; textStatus.textContent = 'Textos del borrador guardados en esta página. No se han compartido ni se han guardado fotos.';
   });
   listen(recoverTexts, 'click', () => {
+    if (persistence) { runLive(() => persistence.load(), 'Borrador recuperado de tu cuenta. La versión compartida no ha cambiado.'); return; }
     if (destroyed || !savedTexts) return;
     privateAlias.value = savedTexts.privateAlias; privateBio.value = savedTexts.privateBio; publicAlias.value = savedTexts.publicAlias; publicBio.value = savedTexts.publicBio;
     updatePreview(); markChanged(); textStatus.textContent = 'Textos recuperados. Las fotos y la última versión que hayas compartido siguen igual.';
@@ -103,12 +106,12 @@ export function createProfileView({ documentRef = document, windowRef = window, 
     const imageWrap = el('div', 'sx-profile-preview-cover');
     if (profile.photos.length) { const image = el('img'); image.src = profile.photos[profile.coverIndex].url; image.alt = 'Portada de la vista previa'; image.dataset.photoId = photos[profile.coverIndex]?.id || ''; styleImage(image, profile.photos[profile.coverIndex]); imageWrap.append(image); }
     else { imageWrap.classList.add('sx-profile-preview-placeholder'); imageWrap.append(icon(UserRound), el('span', '', 'Sin fotos incluidas')); }
-    const copy = el('div', 'sx-profile-preview-copy'); copy.append(el('p', 'sx-profile-kicker', 'VISTA DE DEMO'), el('h3', '', profile.alias || (includeInfo.checked ? 'Tu alias para compartir' : 'Sin presentación incluida')), el('p', 'sx-profile-preview-bio', profile.bio || (includeInfo.checked ? 'Tu presentación aparecerá aquí.' : 'La información de tu espacio privado no aparece en esta vista.')));
+    const copy = el('div', 'sx-profile-preview-copy'); copy.append(el('p', 'sx-profile-kicker', persistence ? 'VISTA PARA TUS CONTACTOS' : 'VISTA DE DEMO'), el('h3', '', profile.alias || (includeInfo.checked ? 'Tu alias para compartir' : 'Sin presentación incluida')), el('p', 'sx-profile-preview-bio', profile.bio || (includeInfo.checked ? 'Tu presentación aparecerá aquí.' : 'La información de tu espacio privado no aparece en esta vista.')));
     previewContent.append(imageWrap, copy);
     if (profile.photos.length > 1) { const more = el('div', 'sx-profile-preview-strip'); profile.photos.forEach((photo, index) => { const box = el('div'); const image = el('img'); image.src = photo.url; image.alt = `Foto ${index + 1} de la selección para compartir`; styleImage(image, photo); box.append(image); more.append(box); }); previewContent.append(more); }
-    previewContent.append(el('p', 'sx-profile-preview-scope', 'Si lo compartes, se verá solo en esta demo mientras la página siga abierta.'));
+    previewContent.append(el('p', 'sx-profile-preview-scope', persistence ? 'Sólo se compartirá la versión que confirmes, con contactos aceptados por ambas partes y sin bloqueos.' : 'Si lo compartes, se verá solo en esta demo mientras la página siga abierta.'));
   }
-  function markChanged() { if (published) status.textContent = 'Hay cambios sin compartir. La demo conserva tu última versión compartida hasta que decidas actualizarla.'; }
+  function markChanged() { if (published) status.textContent = persistence ? 'Hay cambios sin compartir. Tus contactos conservan la última versión confirmada hasta que la actualices o retires.' : 'Hay cambios sin compartir. La demo conserva tu última versión compartida hasta que decidas actualizarla.'; }
   function withdrawPublication(message = 'Has retirado el perfil de esta demo.') { published = null; withdraw.hidden = true; onPublish(null); status.textContent = message; }
   function updateFrame() {
     const photo = photos.find(item => item.id === activeId); frameEditor.hidden = !photo; if (!photo) { frameImage.removeAttribute('src'); return; }
@@ -134,11 +137,12 @@ export function createProfileView({ documentRef = document, windowRef = window, 
     updateFrame(); updatePreview();
     if (focusId) photoList.querySelector(`[data-photo-id="${focusId}"] button[data-action="${action}"]`)?.focus({ preventScroll: true });
   }
-  function removePhoto(photo, fromError = false) {
+  function removePhoto(photo, fromError = false, persisted = false) {
+    if (persistence && photo.managed && !persisted) { runLive(async () => { await persistence.removePhoto(photo.id); removePhoto(photo, fromError, true); }, '', { restore: false }); return; }
     if (published?.photos.some(item => item.url === photo.url)) withdrawPublication('La publicación se ha retirado antes de quitar una de sus fotos.');
     const index = photos.indexOf(photo); if (index < 0) return;
     photos.splice(index, 1); if (coverId === photo.id) coverId = photos[0]?.id || ''; if (activeId === photo.id) activeId = photos[Math.min(index, photos.length - 1)]?.id || '';
-    w.URL.revokeObjectURL(photo.url); renderPhotos(); markChanged();
+    if (!photo.managed) w.URL.revokeObjectURL(photo.url); renderPhotos(); markChanged();
     if (!fromError) { photoStatus.textContent = 'Foto quitada del borrador. El archivo de tu dispositivo sigue intacto.'; if (activeId) photoList.querySelector(`[data-photo-id="${activeId}"] button`)?.focus({ preventScroll: true }); else addPhotos.focus(); }
   }
   listen(fileInput, 'change', () => {
@@ -147,7 +151,7 @@ export function createProfileView({ documentRef = document, windowRef = window, 
       if (!TYPES.has(file.type)) { errors.push('Usa fotos JPG, PNG o WebP.'); continue; }
       if (!file.size || file.size > MAX_BYTES) { errors.push('Cada foto debe tener contenido y ocupar como máximo 8 MB.'); continue; }
       if (photos.length >= MAX_PHOTOS) { errors.push('Puedes preparar un máximo de 6 fotos.'); continue; }
-      try { const photo = { id: `photo-${++sequence}`, url: w.URL.createObjectURL(file), zoom: 1, x: 50, y: 50 }; photos.push(photo); activeId = photo.id; if (!coverId) coverId = photo.id; added++; }
+      try { const photo = { id: `photo-${++sequence}`, url: w.URL.createObjectURL(file), file, zoom: 1, x: 50, y: 50 }; photos.push(photo); activeId = photo.id; if (!coverId) coverId = photo.id; added++; }
       catch { errors.push('Este navegador no ha podido mostrar esa foto aquí.'); }
     }
     fileInput.value = ''; renderPhotos(); if (added) markChanged();
@@ -167,36 +171,92 @@ export function createProfileView({ documentRef = document, windowRef = window, 
   });
   listen(element, 'error', event => {
     const photo = photos.find(item => item.id === event.target.dataset?.photoId); if (destroyed || !photo || event.target.getAttribute('src') !== photo.url) return;
+    if (persistence && photo.managed) { photoStatus.textContent = 'No se ha podido mostrar esa foto. Sigue en tu galería privada; puedes volver a cargar el perfil.'; return; }
     removePhoto(photo, true); photoStatus.textContent = 'No podemos mostrar esa foto. Se ha quitado de la selección sin subir ningún archivo.'; notify(photoStatus.textContent);
   }, true);
   for (const input of [publicAlias, publicBio]) listen(input, 'input', () => { updatePreview(); markChanged(); });
-  for (const input of [includeInfo, includePhotos]) listen(input, 'change', () => { if (!input.checked && published) withdrawPublication('Has cambiado qué quieres incluir. La publicación anterior se ha retirado; comparte de nuevo solo si lo deseas.'); updatePreview(); markChanged(); });
+  for (const input of [includeInfo, includePhotos]) listen(input, 'change', () => { if (!input.checked && published) { if (persistence) runLive(async () => { const result = await persistence.withdraw(); withdrawPublication('Has retirado la versión compartida.'); return result; }, 'Has retirado la versión compartida.', { restore: false }); else withdrawPublication('Has cambiado qué quieres incluir. La publicación anterior se ha retirado; comparte de nuevo solo si lo deseas.'); } updatePreview(); markChanged(); });
   listen(share, 'click', () => {
     if (destroyed) return;
     if (!includeInfo.checked && !includePhotos.checked) { status.textContent = 'Elige si quieres incluir tu presentación, tus fotos o ambas.'; includeInfo.focus(); return; }
     if (includeInfo.checked && !publicAlias.value.trim()) { status.textContent = 'Escribe un alias para la vista compartida. Tu alias privado no se usará.'; publicAlias.focus(); return; }
     if (includePhotos.checked && !photos.length) { status.textContent = 'Elige al menos una foto o desmarca la inclusión de fotos.'; addPhotos.focus(); return; }
+    if (persistence) {
+      const draft = getDraft(), version = stateVersion;
+      runLive(async () => {
+        const accepted = await confirmAction({ title: 'Compartir con mis contactos', description: `Compartirás ${includeInfo.checked ? 'tu alias y presentación' : 'sin alias ni presentación'}${includePhotos.checked ? ` y ${draft.photos.length} fotos` : ', sin fotos'}. Sólo podrán verlo tus contactos aceptados por ambas partes y sin bloqueo. Tus notas privadas quedan fuera.`, confirmLabel: 'Compartir esta versión' });
+        if (!accepted || destroyed || version !== stateVersion) return null;
+        return persistence.publish(draft, { information: draft.includeInformation, photos: draft.includePhotos });
+      }, 'Esta versión se ha compartido con tus contactos aceptados, sin bloqueos.');
+      return;
+    }
     published = snapshotCopy(draftSnapshot()); onPublish(snapshotCopy(published)); withdraw.hidden = false;
     status.textContent = 'Perfil compartido en esta demo mientras la página siga abierta. No se ha publicado en Internet ni enviado a otras personas.'; notify('Tu perfil está compartido en esta demo.');
   });
-  listen(withdraw, 'click', () => { withdrawPublication(); share.focus({ preventScroll: true }); });
+  listen(withdraw, 'click', () => { if (persistence) runLive(async () => { const result = await persistence.withdraw(); withdrawPublication('Has retirado la versión compartida.'); return result; }, 'Has retirado la versión compartida.', { restore: false }); else withdrawPublication(); share.focus({ preventScroll: true }); });
   function clearState({ render = true } = {}) {
     stateVersion++;
     published = null; onPublish(null);
     const previous = photos; photos = []; savedTexts = null; activeId = coverId = ''; privateAlias.value = privateBio.value = publicAlias.value = publicBio.value = ''; includeInfo.checked = includePhotos.checked = false; fileInput.value = '';
     recoverTexts.disabled = true; textStatus.textContent = 'Todavía no has guardado una versión de tus textos.';
     frameImage.removeAttribute('src'); previewContent.replaceChildren(); photoList.replaceChildren();
-    for (const photo of previous) w.URL.revokeObjectURL(photo.url);
+    for (const photo of previous) if (!photo.managed) w.URL.revokeObjectURL(photo.url);
     if (render) { withdraw.hidden = true; photoStatus.textContent = ''; status.textContent = 'Perfil vacío. No hay ninguna vista compartida en esta demo.'; renderPhotos(); }
   }
   function reset() { if (!destroyed) clearState(); }
   listen(deleteButton, 'click', async () => {
     if (destroyed || confirming) return; confirming = true; deleteButton.disabled = true; deleteButton.setAttribute('aria-busy', 'true');
     const version = stateVersion;
-    try { const accepted = await confirmAction({ title: 'Borrar el perfil de esta demo', description: 'Se retirará el perfil compartido y se borrarán los textos, las notas privadas y las vistas previas de las fotos de esta demo. Los archivos originales de tu dispositivo no se borrarán.', confirmLabel: 'Borrar perfil de la demo', danger: true }); if (accepted && !destroyed && version === stateVersion) { reset(); notify('El perfil de esta demo se ha borrado. Tus archivos originales siguen en tu dispositivo.'); } }
+    try { const accepted = await confirmAction({ title: persistence ? 'Borrar mi perfil de la cuenta' : 'Borrar el perfil de esta demo', description: persistence ? 'Se retirará tu versión compartida y se borrarán el borrador, las notas privadas y las fotos de tu cuenta. Los originales de tu dispositivo no se borran.' : 'Se retirará el perfil compartido y se borrarán los textos, las notas privadas y las vistas previas de las fotos de esta demo. Los archivos originales de tu dispositivo no se borrarán.', confirmLabel: persistence ? 'Borrar perfil de mi cuenta' : 'Borrar perfil de la demo', danger: true }); if (accepted && !destroyed && version === stateVersion) { if (persistence) await runLive(() => persistence.deleteProfile(), 'Perfil retirado y borrador borrado de tu cuenta.'); else { reset(); notify('El perfil de esta demo se ha borrado. Tus archivos originales siguen en tu dispositivo.'); } } }
     catch { if (!destroyed) notify('No se ha podido confirmar el borrado. El perfil sigue como estaba.'); }
     finally { confirming = false; if (!destroyed) { deleteButton.disabled = false; deleteButton.removeAttribute('aria-busy'); } }
   });
+  function getDraft() {
+    return { privateAlias: privateAlias.value, privateBio: privateBio.value, publicAlias: publicAlias.value, publicBio: publicBio.value,
+      photos: photos.map(photo => ({ ...photo })), coverId: coverId || null, includeInformation: includeInfo.checked, includePhotos: includePhotos.checked };
+  }
+  function restoreDraft(state, { resetChoices = false } = {}) {
+    if (destroyed || !state?.draft) return;
+    stateVersion++;
+    for (const photo of photos) if (!photo.managed && !state.draft.photos.some(item => item.url === photo.url)) w.URL.revokeObjectURL(photo.url);
+    const draft = state.draft;
+    privateAlias.value = draft.privateAlias || ''; privateBio.value = draft.privateBio || ''; publicAlias.value = draft.publicAlias || ''; publicBio.value = draft.publicBio || '';
+    photos = draft.photos.map(photo => ({ ...photo })); coverId = draft.coverId || photos[0]?.id || ''; activeId = photos[0]?.id || '';
+    savedTexts = { privateAlias: privateAlias.value, privateBio: privateBio.value, publicAlias: publicAlias.value, publicBio: publicBio.value }; recoverTexts.disabled = false;
+    if (resetChoices) includeInfo.checked = includePhotos.checked = false;
+    published = snapshotCopy(state.publication); withdraw.hidden = !published; onPublish(snapshotCopy(published)); renderPhotos();
+    textStatus.textContent = 'Borrador guardado en tu cuenta. Recuperarlo no comparte nada.';
+    status.textContent = published ? 'Hay una versión compartida sólo con tus contactos aceptados y sin bloqueos.' : 'Tu perfil sigue privado. Todavía no hay una versión compartida.';
+  }
+  async function runLive(operation, message, { restore = true } = {}) {
+    if (!persistence || destroyed || liveBusy) return;
+    liveBusy = true; const version = stateVersion; element.setAttribute('aria-busy', 'true');
+    for (const node of element.querySelectorAll('input,textarea,button')) node.disabled = true;
+    try {
+      const result = await operation();
+      if (destroyed || version !== stateVersion || !result) return;
+      if (restore) restoreDraft(result);
+      if (message) { status.textContent = message; notify(message); }
+    } catch (error) { if (!destroyed && version === stateVersion && error?.code !== 'SX_PROFILE_SESSION_CHANGED') { status.textContent = error?.code === '40001' || /revision_conflict/.test(error?.message || '') ? 'El perfil ha cambiado en otra pestaña. Recupera el borrador guardado antes de volver a guardar.' : 'No se ha podido guardar el cambio. Tu borrador sigue aquí para intentarlo de nuevo.'; notify(status.textContent); } }
+    finally {
+      liveBusy = false; element.removeAttribute('aria-busy');
+      if (!destroyed) { for (const node of element.querySelectorAll('input,textarea,button')) node.disabled = false; recoverTexts.disabled = !savedTexts; renderPhotos(); }
+    }
+  }
+  if (persistence) {
+    headingCopy.querySelector('.sx-profile-intro').textContent = 'Tu perfil y tu galería privada, guardados en tu cuenta. Tú decides qué versión compartir con tus contactos.';
+    memoryNote.lastChild.textContent = 'El borrador se guarda en tu cuenta cuando eliges Guardar. Sólo la versión que confirmes se comparte con contactos aceptados por ambas partes y sin bloqueos.';
+    textDraft.querySelector('h4').textContent = 'Tu borrador en tu cuenta';
+    textDraft.querySelector('.sx-profile-description').textContent = 'Guarda los cuatro textos, las fotos, su orden y su encuadre. Guardar no comparte ni actualiza la última versión compartida.';
+    saveTexts.querySelector('span').textContent = 'Guardar borrador en mi cuenta'; recoverTexts.querySelector('span').textContent = 'Recuperar borrador guardado';
+    textDraft.querySelector('.sx-profile-draft-duration').textContent = 'Persiste al recargar e iniciar sesión en otro dispositivo.';
+    photoPanel.querySelector('.sx-profile-kicker').textContent = '03 · GALERÍA PRIVADA';
+    photoPanel.querySelector('.sx-profile-description').textContent = 'Hasta 6 fotos · JPG, PNG o WebP · entrada de hasta 8 MB. Al guardar se normalizan a WebP sin metadatos, hasta 950 KB por foto. Los originales no cambian.';
+    decisionPanel.querySelector('.sx-profile-description').textContent = 'La versión que confirmes se verá sólo entre tus contactos aceptados por ambas partes y sin bloqueos. No se muestra a visitantes ni a otras cuentas.';
+    share.querySelector('span').textContent = 'Compartir con mis contactos'; withdraw.querySelector('span').textContent = 'Retirar versión compartida';
+    deleteButton.querySelector('span').textContent = 'Borrar mi perfil de la cuenta';
+    previewNote.textContent = 'Así se vería la selección actual para tus contactos. Mirarla no la comparte.';
+  }
   renderPhotos();
-  return { element, reset, getPublicProfile: () => snapshotCopy(published), destroy() { if (destroyed) return; destroyed = true; cleanup.splice(0).forEach(remove => remove()); clearState({ render: false }); element.remove(); } };
+  return { element, reset, getDraft, restoreDraft, getPublicProfile: () => snapshotCopy(published), destroy() { if (destroyed) return; destroyed = true; cleanup.splice(0).forEach(remove => remove()); clearState({ render: false }); element.remove(); } };
 }

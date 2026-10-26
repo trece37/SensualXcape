@@ -229,6 +229,11 @@ begin
   select coalesce(sum(byte_size),0),coalesce(sum(byte_size) filter(where owner_id=v_actor),0) into v_global,v_live
     from public.fc_files q where q.status='linked' or q.expires_at>now()
       or exists(select 1 from storage.objects o where o.bucket_id=q.bucket_id and o.name=q.object_path);
+  -- Optional shared V2 budget: real objects across buckets plus outstanding
+  -- reservations. Standalone forum installations retain the original fallback.
+  if to_regprocedure('fc_private.storage_reserved_bytes()') is not null then
+    v_global:=fc_private.storage_reserved_bytes();
+  end if;
   if p_action='policy' then return jsonb_build_object('attachment_limit',v_limit,'avatar_limit',950000,'founder',v_founder,
    'daily_limit',v_daily,'remaining_bytes',greatest(0,v_daily-v_daily_used),'remaining_files',greatest(0,20-v_daily_count),'pending',v_pending,
    'storage_limit',case when v_founder then 200000000 else 50000000 end,'storage_used',v_live); end if;

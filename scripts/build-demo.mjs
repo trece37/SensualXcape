@@ -41,14 +41,14 @@ export function transformPlatformForDemo(source) {
   return source.replaceAll('Entrar al ensayo', 'Sobre esta demo');
 }
 
-export async function buildDemo({ root = resolve(dirname(fileURLToPath(import.meta.url)), '..'), output = join(root, 'dist'), dependencyRoot = process.env.SX_DEMO_DEPS_ROOT || root } = {}) {
+export async function buildDemo({ root = resolve(dirname(fileURLToPath(import.meta.url)), '..'), output = join(root, 'dist'), dependencyRoot = process.env.SX_DEMO_DEPS_ROOT || root, entry = 'demo/demo.js', transform = transformPlatformForDemo } = {}) {
   await assertDemoOutput(output);
   const require = createRequire(join(dependencyRoot, 'package.json'));
   const { build } = require('esbuild');
   await mkdir(join(output, 'assets', 'v11'), { recursive: true });
-  await build({ entryPoints: [join(root, 'demo', 'demo.js')], outfile: join(output, 'demo.js'), bundle: true, format: 'esm', platform: 'browser', target: ['es2022'], minify: true, legalComments: 'inline',
+  await build({ entryPoints: [join(root, entry)], outfile: join(output, 'demo.js'), bundle: true, format: 'esm', platform: 'browser', target: ['es2022'], minify: true, legalComments: 'inline',
     nodePaths: [join(dependencyRoot, 'node_modules')],
-    plugins: [{ name: 'static-demo-shell-adapter', setup(builder) { builder.onLoad({ filter: /platform-v11\.js$/ }, async args => ({ contents: transformPlatformForDemo(await readFile(args.path, 'utf8')), loader: 'js' })); } }]
+    plugins: [{ name: 'static-demo-shell-adapter', setup(builder) { builder.onLoad({ filter: /platform-v11\.js$/ }, async args => ({ contents: transform(await readFile(args.path, 'utf8')), loader: 'js' })); } }]
   });
   const cssNames = ['styles.css', 'cofre.css', 'forocromos.css', 'care.css', 'platform-v11.css', 'demo/demo.css', 'demo/profile-studio.css', 'demo/cofre-studio.css', 'demo/guide-studio.css', 'demo/studio.css', 'demo/effects/effects.css'];
   const css = await Promise.all(cssNames.map(name => readFile(join(root, name), 'utf8')));

@@ -11,10 +11,16 @@ async function clearCards() { for (const notification of await self.registration
 self.addEventListener('install', event => event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 self.addEventListener('message', event => {
-  if (event.data?.type !== 'FC_SET_PUSH_BINDING' || !event.source?.url?.startsWith(self.registration.scope)) return;
+  if (event.data?.type !== 'FC_SET_PUSH_BINDING') return;
   const id = event.data.id;
   if (id !== null && (typeof id !== 'string' || !uuid.test(id))) return;
+  let source;try{source=new URL(event.source?.url);}catch{return;}
+  const scope=new URL(self.registration.scope),outsideForum=!source.href.startsWith(scope.href);
+  const app=new URL('../v2/',scope);
+  // The connected web may clear its own previous binding, never install a new one.
+  if(source.origin!==scope.origin || (outsideForum && (!source.pathname.startsWith(app.pathname) || id!==null || !uuid.test(event.data.expected_id||''))))return;
   event.waitUntil(enqueue(async () => {
+    if(event.data.expected_id && await binding()!==event.data.expected_id){event.ports?.[0]?.postMessage({ok:true});return;}
     if ((await binding()) !== (id || '')) await clearCards();
     // Only an opaque device id is retained. No session, email or forum text is cached.
     await (await caches.open(bindingCache)).put(bindingUrl, new Response(id || ''));

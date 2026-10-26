@@ -32,6 +32,9 @@ const server = createServer(async (request, response) => {
     } else if (relative.startsWith('v2/')) {
       const v2 = files.get(relative.slice(3));
       if (v2) entry = [`v2/${v2[0]}`, v2[1]];
+    } else if (relative.startsWith('demo/')) {
+      const demo = files.get(relative.slice(5));
+      if (demo) entry = [`demo/${demo[0]}`, demo[1]];
     } else if (v1Paths.has(relative)) entry = files.get(relative);
   } else if (relative !== null) entry = files.get(relative);
   if (!entry) { response.writeHead(404); response.end('Not found'); return; }

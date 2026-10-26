@@ -90,7 +90,7 @@ export const SERVICE_GUIDES = Object.freeze({
 
 const ICONS = { profile: UserRound, messages: MessagesSquare, community: UsersRound, cofre: Vault, care: HeartHandshake, auralink: Sparkles, trust: ShieldCheck, feedback: MessageSquarePlus, plans: Gem };
 
-export function createGuideView({ documentRef = document, onOpenGuide = () => {}, onNavigate = () => {} } = {}) {
+export function createGuideView({ documentRef = document, onOpenGuide = () => {}, onNavigate = () => {}, guides = SERVICE_GUIDES } = {}) {
   const d = documentRef;
   const el = (tag, cls, text) => { const node = d.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
   const icon = nodes => {
@@ -103,7 +103,7 @@ export function createGuideView({ documentRef = document, onOpenGuide = () => {}
   const copy = el('div'); copy.append(el('p', 'sx-guide-kicker', 'A TU RITMO'), el('h2', '', 'Encuentra tu forma de usarlo'), el('p', 'sx-guide-intro', 'Cada herramienta tiene su propósito. Elige la que te interese y descubre sus pasos antes de empezar.'));
   heading.append(headingIcon, copy); element.append(heading);
   const grid = el('div', 'sx-guide-grid');
-  for (const [key, guide] of Object.entries(SERVICE_GUIDES)) {
+  for (const [key, guide] of Object.entries(guides)) {
     const card = el('article', 'sx-guide-card'), mark = el('span', 'sx-guide-icon'); mark.append(icon(ICONS[key]));
     card.append(mark, el('p', 'sx-guide-kicker', guide.eyebrow), el('h3', '', guide.title), el('p', 'sx-guide-description', guide.description));
     const open = el('button', 'sx-guide-button sx-help-point'); open.type = 'button'; open.dataset.guide = key; open.setAttribute('aria-label', `Cómo funciona: ${guide.title}`); open.title = `Cómo funciona: ${guide.title}`; open.append(el('span', '', '?')); open.addEventListener('click', () => onOpenGuide(key)); card.append(open); grid.append(card);

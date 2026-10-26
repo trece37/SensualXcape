@@ -7,16 +7,17 @@
 <p align="center">
   <a href="https://trece37.github.io/SensualXcape/v2/"><strong>✨ ABRIR SENSUALXCAPE V2</strong></a>
   &nbsp; · &nbsp; <a href="https://trece37.github.io/SensualXcape/foro/"><strong>Foro Cromos · comunidad privada</strong></a>
-  &nbsp; · &nbsp; <a href="https://trece37.github.io/SensualXcape/">Conservar la V1 original</a>
+  &nbsp; · &nbsp; <a href="https://trece37.github.io/SensualXcape/demo/">Maqueta sin cuenta</a>
+  &nbsp; · &nbsp; <a href="https://trece37.github.io/SensualXcape/">V1 original</a>
   &nbsp; · &nbsp; <a href="#tres-atmósferas-una-misma-experiencia">Ver los estilos</a>
   &nbsp; · &nbsp; <a href="docs/DESARROLLO.md">Guía de desarrollo</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/trece37/SensualXcape/actions/workflows/pages.yml"><img src="https://github.com/trece37/SensualXcape/actions/workflows/pages.yml/badge.svg" alt="Comprobación y publicación de la demo"></a>
-  <img src="https://img.shields.io/badge/versión-V1.1-c92337?style=flat-square" alt="Versión V1.1">
-  <img src="https://img.shields.io/badge/estado-en_desarrollo-a78bfa?style=flat-square" alt="En desarrollo">
-  <img src="https://img.shields.io/badge/demo-datos_ficticios-eaa4c2?style=flat-square" alt="Demo con datos ficticios">
+  <img src="https://img.shields.io/badge/versión-V2-c92337?style=flat-square" alt="Versión V2">
+  <img src="https://img.shields.io/badge/estado-piloto_privado-a78bfa?style=flat-square" alt="Piloto privado">
+  <img src="https://img.shields.io/badge/backend-Supabase-eaa4c2?style=flat-square" alt="Backend Supabase">
 </p>
 
 ---
@@ -25,16 +26,34 @@
 
 Foro Cromos añade una comunidad conectada a Supabase, con cuenta, admisión propia,
 conversaciones persistentes, guardados y moderación. La interfaz está bajo `/foro/`;
-V1 y V2 conservan sus demostraciones independientes. Consulta el
+V2 conecta cuentas, contactos, conversaciones y perfil a Supabase; la maqueta sin
+cuenta se conserva en `/demo/` y la V1 original en la raíz. Consulta el
 [alcance y estado del foro](docs/FORO_CROMOS.md) antes de abrir un piloto.
 
 SensualXcape se construye para mujeres adultas que ejercen la prostitución: un espacio para organizarse, conectar entre compañeras y elegir qué compartir, con quién y cuándo. El producto parte de necesidades reales, autonomía y utilidad cotidiana.
 
 Esta V1.1 reúne su identidad visual y sus recorridos en una web adaptable. En el teléfono encontrarás navegación al alcance del pulgar, accesos rápidos, conversaciones enfocadas y superficies de cristal con una presencia más cuidada.
 
-**Durante el desarrollo, el código y la demo están en GitHub.** La demo se publica con GitHub Pages. La decisión sobre un alojamiento del producto completo vendrá después.
+**La web se publica en GitHub Pages y los servicios conectados usan Supabase.**
+El piloto mantiene las cuentas existentes; las nuevas altas por correo siguen pendientes del servicio de envío.
 
-> **Prueba sin cuenta.** Todos los contactos, conversaciones, archivos y temas de comunidad de la demo son inventados. Sus cambios viven solo en memoria y desaparecen al recargar. No envía mensajes, no cobra ni avisa a nadie.
+> **Web conectada:** [V2](https://trece37.github.io/SensualXcape/v2/) y [Foro Cromos](https://trece37.github.io/SensualXcape/foro/) guardan sus datos reales. **Prueba sin cuenta:** [maqueta independiente](https://trece37.github.io/SensualXcape/demo/), con datos ficticios y cambios sólo en memoria.
+
+## V2 conectada · 26/10/2026
+
+La misma cuenta abre V2 y Foro Cromos. Mensajes permite invitaciones, solicitudes,
+aceptación o rechazo, historial privado y bloqueo efectivo. Se conserva el historial
+anterior de Connect. La admisión al foro se decide por separado.
+
+Mi perfil guarda el borrador, hasta seis fotos, su orden y encuadre. Compartir crea
+una copia separada para contactos aceptados y sin bloqueos; no hay directorio público.
+Las fotos se normalizan a WebP de hasta 950 KB y se descargan con sesión autenticada.
+El perfil y avatar del foro siguen siendo independientes.
+
+El Cofre sigue siendo temporal en la pestaña; el check-in es una simulación y
+AuraLink no conecta generación de IA. La web los identifica antes de usarlos.
+No hay correo saliente configurado ni cobros. Noir, Rosa, Fucsia y el Modo fácil
+conservan la presentación existente. [Alcance y verificación](docs/WEBAPP_V2_CONECTADA_20261026.md).
 
 ## V2 · Estudio Noir y efectos
 
@@ -42,9 +61,9 @@ El candidato del **23/10/2026** amplía la experiencia con una entrada para pers
 
 El **24/10/2026** se incorporaron las correcciones de la maqueta y la dirección de efectos aprobada: imágenes integradas con el fondo, servicios compactos, ayuda discreta, reflejos y respuestas breves. El humo queda en las ilustraciones de entrada y en el Cofre. El Cofre se abre al tocarlo o mantener pulsado; sus objetos representan las mismas notas y archivos que aparecen en la lista. Moverlos o recogerlos no elimina su contenido.
 
-**Se mantienen dos versiones.** La [V1.1 original](https://trece37.github.io/SensualXcape/) conserva la raíz de GitHub Pages. La [V2](https://trece37.github.io/SensualXcape/v2/) utiliza `/SensualXcape/v2/`. GitHub Actions comprueba y publica ambas desde el mismo repositorio. El build verifica que los cinco archivos de la V1 conservan exactamente sus huellas originales. Estado y comprobaciones: [V2 · implementación y verificación](docs/V2_20261024.md).
+**Histórico de la maqueta.** La [V1.1 original](https://trece37.github.io/SensualXcape/) conserva la raíz de GitHub Pages. La maqueta V2 descrita aquí se conserva en [/demo/](https://trece37.github.io/SensualXcape/demo/); `/v2/` contiene ahora la web conectada. GitHub Actions publica las tres rutas y el foro. El build verifica que los cinco archivos de la V1 conservan exactamente sus huellas originales. Estado anterior: [V2 · implementación y verificación](docs/V2_20261024.md).
 
-El perfil, las fotos y el Cofre funcionan en la pestaña: permiten probar acciones reales del navegador, sin guardar tus aportaciones después de recargar. La entrada no autentica cuentas; los mensajes, la comunidad y los avisos siguen siendo simulaciones, y AuraLink no tiene generación de IA conectada.
+En la maqueta independiente, el perfil, las fotos y el Cofre funcionan sólo en la pestaña. Su entrada no autentica cuentas y sus mensajes son simulados. Esto describe `/demo/`; el estado conectado de `/v2/` se explica arriba.
 
 La V2 conserva Noir, Rosa y Fucsia, el Modo fácil y los avisos de cada servicio. Los efectos se pueden apagar y respetan la preferencia de movimiento reducido. La comprobación en un Android físico queda pendiente de la prueba del enlace por Walker.
 

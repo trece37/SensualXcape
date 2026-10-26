@@ -31,9 +31,15 @@ test('the Pages build keeps root V1 byte-for-byte and places the current app onl
   const v1 = await readFile(join(output, 'index.html'), 'utf8');
   const v2 = await readFile(join(output, 'v2', 'index.html'), 'utf8');
   assert.notEqual(v1, v2);
-  assert.match(v2, /src="\.\/demo\.js"/u);
-  assert.match(v2, /href="\.\/demo\.css"/u);
-  assert.match(v2, /connect-src 'none'/u);
+  assert.match(v2, /src="\.\/demo\.js\?v=live-20261026"/u);
+  assert.match(v2, /href="\.\/demo\.css\?v=live-20261026"/u);
+  assert.match(v2, /connect-src 'self' https:\/\/oorheeyyahpyiarwktbq\.supabase\.co/u);
+  const demo = await readFile(join(output, 'demo', 'index.html'), 'utf8');
+  assert.match(demo, /connect-src 'none'/u);
+  assert.match(demo, /data-static-demo="true"/u);
+  const liveBundle = await readFile(join(output, 'v2', 'demo.js'), 'utf8');
+  assert.match(liveBundle, /sx-forocromos-live/u);
+  assert.doesNotMatch(liveBundle, /sb_secret_|SUPABASE_SERVICE_ROLE_KEY/u);
   assert.deepEqual(await readFile(join(output, 'v2', 'assets', 'v2', 'cofre-closed.png')), await readFile(join(root, 'assets', 'v2', 'cofre-closed.png')));
   const forum = await readFile(join(output, 'foro', 'index.html'), 'utf8');
   assert.match(forum, /connect-src 'self' https:\/\/oorheeyyahpyiarwktbq\.supabase\.co wss:\/\/oorheeyyahpyiarwktbq\.supabase\.co/u);

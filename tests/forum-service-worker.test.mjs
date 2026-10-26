@@ -34,3 +34,12 @@ test('a notification from a logged-out account cannot open a conversation and bi
  await h.emit('notificationclick',{notification:{data:{device_id:device,topic_id:topic},close(){}}});assert.deepEqual(h.opened,[]);
  assert.equal([...h.cache.values()][0],'');assert.doesNotMatch(source,/addEventListener\(['"]fetch|access_token|refresh_token|localStorage/);
 });
+test('V2 may clear its captured old binding but cannot rebind or clear a newer account',async()=>{
+ const h=fixture();await h.bind(device);
+ const fromApp=(data,url='https://example.invalid/v2/')=>h.emit('message',{data:{type:'FC_SET_PUSH_BINDING',...data},source:{url},ports:[{postMessage:value=>h.acks.push(value)}]});
+ await fromApp({id:topic,expected_id:device});assert.equal([...h.cache.values()][0],device);
+ await fromApp({id:null,expected_id:device},'https://attacker.invalid/v2/');assert.equal([...h.cache.values()][0],device);
+ await fromApp({id:null});assert.equal([...h.cache.values()][0],device);
+ await h.bind(topic);await fromApp({id:null,expected_id:device});assert.equal([...h.cache.values()][0],topic);
+ await fromApp({id:null,expected_id:topic});assert.equal([...h.cache.values()][0],'');
+});

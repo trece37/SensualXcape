@@ -9,10 +9,11 @@ const ART = './assets/v2/';
 import { STUDIO_NOTICES } from './notices-studio.js';
 export { STUDIO_NOTICES };
 
-export function mountStudio({ platform, documentRef = document, windowRef = window } = {}) {
+export function mountStudio({ platform, documentRef = document, windowRef = window, live = null } = {}) {
   if (!platform || documentRef.getElementById('sx-studio-footer')) return null;
   const d = documentRef, w = windowRef, cleanups = [], main = d.getElementById('v11-workspace');
-  let entered = false, adult = false, sharedProfile = null, pendingRoute = 'home', disposed = false, visualEffects;
+  const serviceGuides=live?.guides||SERVICE_GUIDES;
+  let entered = false, adult = false, sharedProfile = null, pendingRoute = 'home', disposed = false, visualEffects,liveIdentity=null;
   const el = (tag, cls, text) => { const node = d.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
   const on = (node, type, fn) => { node.addEventListener(type, fn); cleanups.push(() => node.removeEventListener(type, fn)); };
   const icon = (data, cls = '') => { const svg = d.createElementNS('http://www.w3.org/2000/svg', 'svg'); for (const [key, value] of Object.entries({ viewBox:'0 0 24 24', fill:'none', stroke:'currentColor', 'stroke-width':'1.6', 'stroke-linecap':'round', 'stroke-linejoin':'round', 'aria-hidden':'true', class:`sx-icon ${cls}` })) svg.setAttribute(key,value); for (const [tag, attrs] of data) { const child = d.createElementNS(svg.namespaceURI,tag); for (const [key,value] of Object.entries(attrs)) child.setAttribute(key,value); svg.append(child); } return svg; };
@@ -33,8 +34,8 @@ export function mountStudio({ platform, documentRef = document, windowRef = wind
   on(dialog,'cancel',event=>{event.preventDefault();closeDialog(false);});
   on(dialog,'click',event=>{if(event.target===dialog)closeDialog(false);});
   function fillDialog(title,paragraphs) { dialogTrigger=d.activeElement; dialog.replaceChildren(); const head=el('div','sx-dialog-head'); const h=el('h2','',title); h.id='sx-dialog-title'; const close=button('Cerrar',()=>closeDialog(false),'sx-icon-button',X); close.setAttribute('aria-label','Cerrar información'); head.append(h,close); dialog.append(head); for(const text of paragraphs)dialog.append(el('p','',text)); }
-  function showInfo(key) { if(key?.startsWith('how-')){showGuide(key.slice(4));return;}const info=STUDIO_NOTICES[key]||STUDIO_NOTICES.privacy; if(dialog.open)closeDialog(false); fillDialog(info.title,info.paragraphs); dialog.append(button('Entendido',()=>closeDialog(false),'sx-button sx-primary')); dialog.showModal(); }
-  function showGuide(key){const guide=SERVICE_GUIDES[key];if(!guide)return;if(dialog.open)closeDialog(false);fillDialog(guide.title,[guide.description]);const steps=el('ol','sx-how-steps');for(const step of guide.steps){const item=el('li');item.append(el('h3','',step.title),el('p','',step.text));steps.append(item);}dialog.append(steps,el('p','sx-guide-scope',guide.note));const actions=el('div','sx-actions');actions.append(button('Cerrar guía',()=>closeDialog(false),'sx-button'),button(entered?'Abrir este espacio':'Ver el área profesional',()=>{closeDialog(false);platform.navigate(entered?guide.route:'professional');},'sx-button sx-primary'));dialog.append(actions);dialog.showModal();}
+  function showInfo(key) { if(key?.startsWith('how-')){showGuide(key.slice(4));return;}const info=live?.notices?.[key]||STUDIO_NOTICES[key]||STUDIO_NOTICES.privacy; if(dialog.open)closeDialog(false); fillDialog(info.title,info.paragraphs); dialog.append(button('Entendido',()=>closeDialog(false),'sx-button sx-primary')); dialog.showModal(); }
+  function showGuide(key){const guide=serviceGuides[key];if(!guide)return;if(dialog.open)closeDialog(false);fillDialog(guide.title,[guide.description]);const steps=el('ol','sx-how-steps');for(const step of guide.steps){const item=el('li');item.append(el('h3','',step.title),el('p','',step.text));steps.append(item);}dialog.append(steps,el('p','sx-guide-scope',guide.note));const actions=el('div','sx-actions');actions.append(button('Cerrar guía',()=>closeDialog(false),'sx-button'),button(entered?'Abrir este espacio':'Ver el área profesional',()=>{closeDialog(false);platform.navigate(entered?guide.route:'professional');},'sx-button sx-primary'));dialog.append(actions);dialog.showModal();}
   function confirmAction({title,description,confirmLabel='Eliminar de la prueba',danger=true}) { if(dialog.open)closeDialog(false); fillDialog(title,[description]); return new Promise(resolve=>{ resolveConfirm=resolve; const actions=el('div','sx-actions'); actions.append(button('Conservar',()=>closeDialog(false),'sx-button'),button(confirmLabel,()=>closeDialog(true),`sx-button ${danger?'sx-danger':'sx-primary'}`)); dialog.append(actions); dialog.showModal(); }); }
 
   d.body.classList.add('sx-studio'); d.title='SensualXcape · Un universo propio';
@@ -111,10 +112,10 @@ export function mountStudio({ platform, documentRef = document, windowRef = wind
   const dashGrid=el('div','sx-dashboard-grid'); for(const [route,title,text,art,num,asset]of serviceData.slice(1)){const card=button('',()=>platform.navigate(route),'sx-dashboard-card');if(asset)card.append(image(asset,'',''));card.append(icon(art),el('h3','',title),el('p','',text),el('span','sx-quiet','Abrir espacio →'));dashGrid.append(card);}dashboard.append(dashGrid);
   const dashExtras=el('div','sx-extras');for(const [text,route,art]of[['Mis límites','trust',ShieldCheck],['Preferencias','settings',Settings2],['Tu voz cuenta','feedback',MessageSquarePlus],['Planes y herramientas','plans',Gem]])dashExtras.append(go(text,route,'sx-extra-link',art));dashboard.append(dashExtras);platform.registerPage('home',dashboard,{title:'Mi espacio'});
 
-  const profile=createProfileView({documentRef:d,windowRef:w,onInfo:showInfo,notify,confirmAction,onPublish:value=>{sharedProfile=value;renderVisitors();}});
+  const profile=(live?.createProfileView || createProfileView)({documentRef:d,windowRef:w,onInfo:showInfo,notify,confirmAction,onPublish:value=>{sharedProfile=value;if(!live)renderVisitors();}});
   const cofre=createCofreView({documentRef:d,windowRef:w,onInfo:showInfo,notify,confirmAction});
   platform.registerPage('profile',profile.element,{title:'Mi perfil'});platform.registerPage('cofre',cofre.element,{title:'Mi Cofre'});
-  const guides=createGuideView({documentRef:d,onOpenGuide:showGuide,onNavigate:route=>platform.navigate(route==='home'&&!entered?'welcome':route)});platform.registerPage('guide',guides.element,{title:'Cómo funciona'});
+  const guides=createGuideView({documentRef:d,guides:serviceGuides,onOpenGuide:showGuide,onNavigate:route=>platform.navigate(route==='home'&&!entered?'welcome':route)});platform.registerPage('guide',guides.element,{title:'Cómo funciona'});
   for(const key of Object.keys(SERVICE_GUIDES)){const page=main.querySelector(`[data-v11-page="${key}"]`);if(page){const help=el('div','sx-tool-help');help.append(helpButton(`Cómo funciona: ${SERVICE_GUIDES[key].title}`,()=>showGuide(key)));page.prepend(help);}}
   const visitors=el('section','sx-visitors');const visitorHead=heading('VISTAS DE DEMOSTRACIÓN','Cada perfil, una forma de presentarse.','Una selección sintética para probar una lectura más clara. No son personas reales.');
   const visitorControls=el('div','sx-visitor-controls'); visitorControls.append(go('Área profesional','professional','sx-text-link',ArrowLeft));const visitorTheme=button('Cambiar a claro',()=>{const light=visitors.dataset.appearance!=='light';visitors.dataset.appearance=light?'light':'dark';d.body.dataset.visitorAppearance=light?'light':'dark';visitorTheme.replaceChildren(icon(light?Moon:Sun),el('span','',light?'Cambiar a oscuro':'Cambiar a claro'));},'sx-button',Sun);visitorControls.append(visitorTheme);visitors.append(visitorControls,visitorHead);
@@ -138,7 +139,7 @@ export function mountStudio({ platform, documentRef = document, windowRef = wind
   const signOut=button('Salir de la demo',()=>{entered=false;platform.navigate('welcome');notify('Has salido del espacio de prueba. Recargar limpia las aportaciones de la pestaña.');},'sx-session-exit',LogOut);signOut.setAttribute('aria-label','Salir de la demo');d.querySelector('.v11-topbar-actions')?.append(signOut);
   const privateRoutes=new Set(['home','profile','messages','cofre','community','care','trust','auralink','feedback','plans','settings']);
   platform.setRouteGuard(destination=>{if(destination==='access')return entered?'profile':'professional';if(privateRoutes.has(destination)&&!entered){pendingRoute=destination;return 'professional';}return destination;});
-  function enter(){entered=true;password.value='';email.value='';const target=pendingRoute==='home'?'home':pendingRoute;pendingRoute='home';platform.navigate(target);notify('Espacio de demostración abierto. Tus aportaciones permanecen en esta pestaña.');}
+  function enter(){entered=true;password.value='';email.value='';const target=pendingRoute==='home'?'home':pendingRoute;pendingRoute='home';platform.navigate(target);if(!live)notify('Espacio de demostración abierto. Tus aportaciones permanecen en esta pestaña.');}
   function routeChanged(){const route=platform.route;const isPublic=!privateRoutes.has(route);d.body.classList.toggle('sx-public',isPublic);d.body.classList.toggle('sx-visitor-mode',route==='visitors');if(route==='visitors')d.body.dataset.visitorAppearance=visitors.dataset.appearance||'dark';signOut.hidden=!entered;const account=d.getElementById('v11-account');if(account){account.setAttribute('aria-label',entered?'Mi perfil':'Entrar');const label=account.querySelector('.v11-account-label');if(label)label.textContent=entered?'Mi perfil':'Entrar';}d.title=`SensualXcape · ${route==='welcome'?'Un universo propio':route==='professional'?'Área profesional':route==='visitors'?'Perfiles de prueba':d.getElementById('v11-page-title')?.textContent||'Tu espacio'}`;}
   on(w,'sx:route',routeChanged);
   const themeSelect=d.getElementById('v11-theme');if(themeSelect){themeSelect.setAttribute('aria-label','Atmósfera visual');themeSelect.replaceChildren();for(const[value,text]of[['noir','Noir'],['rose','Rosa'],['neon','Fucsia']]){const option=el('option','',text);option.value=value;themeSelect.append(option);}themeSelect.value='noir';}
@@ -151,7 +152,33 @@ export function mountStudio({ platform, documentRef = document, windowRef = wind
   function showAgeAgain(){if(disposed)return;d.body.append(age);age.replaceChildren(mark(),el('h2','','Solo para personas adultas'),el('p','','Para continuar, declara que tienes 18 años o más.'),ageEnter,ageExit);age.showModal();}
   if(!adult)age.showModal();
   visualEffects=mountEffects({documentRef:d,windowRef:w,platform,settings});
-  return { get entered(){return entered;}, get sharedProfile(){return sharedProfile;}, showInfo, confirmAction,
+  // Real accounts use the same presentation, with no sample-login handler or synthetic profiles.
+  if(live){
+    d.body.removeAttribute('data-static-demo');d.body.dataset.liveApp='true';
+    if(banner){banner.replaceChildren(d.createTextNode('SensualXcape · acceso privado · perfil y conversaciones conectados'));}
+    login.querySelector('.sx-eyebrow').textContent='TU CUENTA SENSUALXCAPE';tabs.remove();
+    emailLabel.firstChild.textContent='Correo de acceso';email.placeholder='Tu correo';email.autocomplete='username';email.id='sx-live-email';
+    passwordLabel.firstChild.textContent='Contraseña';password.placeholder='Tu contraseña';password.autocomplete='current-password';password.id='sx-live-password';
+    const realForm=loginForm.cloneNode(true);loginForm.replaceWith(realForm);
+    const realEmail=realForm.querySelector('input[type=email]'),realPassword=realForm.querySelector('input[type=password]'),realStatus=realForm.querySelector('[role=status]'),realSubmit=realForm.querySelector('[type=submit]');
+    realForm.querySelector('.sx-form-help').textContent='Usa la misma cuenta que en Foro Cromos. Las nuevas altas se preparan por invitación durante esta prueba privada.';
+    login.querySelector(':scope > .sx-text-link')?.remove();
+    on(realForm,'submit',async event=>{event.preventDefault();if(realSubmit.disabled)return;if(!realEmail.value.trim()||!realPassword.value){realStatus.textContent='Escribe tu correo y contraseña.';return;}realSubmit.disabled=true;realStatus.textContent='Entrando…';try{await live.signIn(realEmail.value.trim(),realPassword.value);realPassword.value='';realStatus.textContent='';}catch(error){realStatus.textContent=live.errorText?.(error)||'No se ha podido entrar. Revisa tus datos e inténtalo de nuevo.';}finally{realSubmit.disabled=false;}});
+    signOut.replaceWith(signOut.cloneNode(true));const realExit=d.querySelector('.sx-session-exit');realExit.replaceChildren(d.createTextNode('Salir de mi cuenta'));realExit.setAttribute('aria-label','Salir de mi cuenta');on(realExit,'click',async()=>{realExit.disabled=true;try{await live.signOut();}catch{notify('No se pudo cerrar la sesión. Inténtalo de nuevo.');}finally{realExit.disabled=false;}});
+    // The old sample-only preferences never mutate a real profile.
+    deleteAll.remove();optional.remove();settings.querySelector('hr')?.remove();
+    settings.append(el('p','sx-form-help','La atmósfera y el modo fácil se guardan en este dispositivo. El perfil se gestiona desde Mi perfil.'));
+    visitorGrid.replaceChildren();visitorHead.replaceChildren(heading('PRIVACIDAD POR ELECCIÓN','Tu presentación tiene destinatarias.','Durante el acceso privado, tu perfil compartido solo lo ven tus contactos aceptados. No hay un directorio público.'));visitorNotice.replaceChildren(el('p','','Acepta un contacto desde Mensajes para conversar. Desde su conversación podrás abrir su perfil si ha decidido compartirlo.'));
+    footer.querySelector('small').textContent='SensualXcape · prueba privada · acceso, mensajes y perfil conectados a Supabase';
+    const forumLink=el('a','sx-version-link','Foro Cromos · abrir la comunidad');forumLink.href='../foro/';footer.append(forumLink);
+    const demoLink=el('a','sx-version-link','Explorar la maqueta sin cuenta');demoLink.href='../demo/';footer.append(demoLink);
+    d.querySelector('.v11-sidebar-foot .v11-badge').textContent='Acceso privado';
+    const intro=welcome.querySelector('.sx-path-card:last-child p:not(.sx-eyebrow)');if(intro)intro.textContent='Tu presentación compartida se reserva a tus contactos aceptados. Tú decides cuándo mostrarla y retirarla.';
+    welcome.querySelector('.sx-path-card:last-child .sx-text-link')?.querySelector('span')?.replaceChildren(d.createTextNode('Cómo se comparte un perfil'));
+    on(w,'sx:route',()=>{realExit.hidden=!entered;});
+  }
+  return { get entered(){return entered;}, get sharedProfile(){return sharedProfile;}, showInfo, confirmAction, notify, profile,
+    setSession(session){if(!live)return;const wasEntered=entered,nextIdentity=session?.user?.id||null;if(nextIdentity!==liveIdentity){cofre.reset();closeDialog(false);sharedProfile=null;liveIdentity=nextIdentity;}entered=!!session?.user;profile.setSession?.(session);if(!entered){profile.reset?.();if(wasEntered)platform.navigate('welcome',{replace:true});}else if(!wasEntered){enter();}routeChanged();const exit=d.querySelector('.sx-session-exit');if(exit)exit.hidden=!entered;if(!entered){const realForm=d.querySelector('.sx-login-form');for(const input of realForm?.querySelectorAll('input')||[])input.value='';}},
     destroy(){disposed=true;visualEffects?.destroy();w.clearTimeout(toastTimer);profile.destroy();cofre.destroy();closeDialog(false);cleanups.splice(0).forEach(fn=>fn());platform.setRouteGuard(null);for(const node of [dialog,age,toast,footer,publicBar,signOut])node.remove();d.body.classList.remove('sx-studio','sx-public','sx-visitor-mode','sx-easy');}
   };
 }

@@ -18,6 +18,9 @@
   --success: #a6dfc2;
   --danger: #ffc0b9;
   --focus: #ffd5dd;
+  --message-rose: #ffc4d0;
+  --message-violet: #d5beff;
+  --message-teal: #9ce6d7;
   --hero-gradient: linear-gradient(90deg, #120d12 0%, #120d12f5 33%, #120d1299 58%, #120d1200 80%);
   --hero-base: #140d15;
   --ambient: #7d264225;
@@ -48,6 +51,9 @@ html[data-theme="agape"], body[data-theme="agape"] {
   --success: #296447;
   --danger: #9c253d;
   --focus: #8b3156;
+  --message-rose: #8b3156;
+  --message-violet: #653b8d;
+  --message-teal: #236557;
   --hero-gradient: linear-gradient(90deg, #fff8f2 0%, #fff8f2fa 31%, #fff8f2bd 50%, #fff8f200 78%);
   --hero-base: #f6e3e5;
   --ambient: #b4658220;
@@ -72,6 +78,9 @@ html[data-theme="eros"], body[data-theme="eros"] {
   --success: #a2e6d3;
   --danger: #ffbcbc;
   --focus: #ffa9ed;
+  --message-rose: #ffc2e6;
+  --message-violet: #d8c0ff;
+  --message-teal: #9ee8d8;
   --hero-gradient: linear-gradient(90deg, #140b1c 0%, #140b1cf5 32%, #140b1c99 57%, #140b1c00 80%);
   --hero-base: #190d21;
   --ambient: #9b20b62b;
@@ -325,6 +334,79 @@ button.topic-main, a.topic-main { display: block; border: 0; padding: 0; backgro
 .manifesto-list > li::before { content: counter(pact, decimal-leading-zero); position: absolute; left: 0; top: 22px; font: italic 20px var(--heading); color: var(--accent); }
 .manifesto-list h3 { font: 20px/1.4 var(--heading); }
 .manifesto-list p { margin-top: 8px; font-size: 13px; line-height: 1.8; color: var(--muted); }
+.member-panel { padding: 18px; margin-bottom: 18px; }
+.member-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.member-line.detailed { align-items: flex-start; }
+.member-avatar { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--accent-tint); color: var(--accent); font: 24px/1 var(--heading); }
+.member-avatar img { display: block; width: 48px; height: 48px; max-width: none; object-fit: cover; }
+.member-info { flex: 1; min-width: 0; }
+.member-name { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; padding: 3px 0; border: 0; background: transparent; color: var(--text); font-size: 14px; font-weight: 650; line-height: 1.45; text-align: left; overflow-wrap: anywhere; }
+.member-name:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 4px; }
+.member-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.member-level, .staff-badge { display: inline-flex; align-items: center; min-height: 25px; max-width: 100%; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.staff-badge { background: var(--accent-tint); color: var(--accent); }
+.member-stats { display: block; margin-top: 9px; color: var(--muted); font-size: 12px; line-height: 1.75; overflow-wrap: anywhere; }
+.member-tagline { margin-top: 8px; color: var(--muted); font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.member-panel > .text-button { width: 100%; margin-top: 13px; justify-content: flex-start; font-size: 13px; }
+.post-header { align-items: flex-start; gap: 12px; }
+.post-header > .member-line { flex: 1; }
+.post-header > time { padding-top: 12px; white-space: nowrap; }
+#profile-button { min-height: 44px; }
+#member-dialog > .member-line { margin-block: 20px; }
+#member-dialog > .button { margin-top: 20px; }
+.composer-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 12px 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
+.composer-toolbar .composer-choice { display: grid; gap: 7px; min-width: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+.composer-choice select { min-height: 46px; padding: 10px 30px 10px 11px; font-size: 14px; font-weight: 400; }
+.composer-toolbar .emoji-toggle { min-height: 46px; padding-inline: 14px; font-size: 14px; white-space: nowrap; }
+.emoji-toggle[aria-expanded="true"] { border-color: var(--accent); }
+.emoji-picker { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr)); gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--input); }
+.emoji-option { display: grid; place-items: center; width: 100%; min-width: 44px; min-height: 44px; padding: 6px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--surface); color: var(--text); font-size: 22px; line-height: 1; }
+.emoji-option:hover, .emoji-option:focus-visible { border-color: var(--accent); background: var(--accent-tint); }
+.composer-status { grid-column: 1 / -1; font-size: 12px; }
+.composer-status:empty { display: none; }
+.styled-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.styled-body p + p { margin-top: 1.2em; }
+.font-sans { font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+.font-serif { font-family: Georgia, "Times New Roman", serif; }
+.font-mono { font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+.color-default { color: var(--text); }
+.color-rose { color: var(--message-rose); }
+.color-violet { color: var(--message-violet); }
+.color-teal { color: var(--message-teal); }
+.upload-panel { display: grid; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-raised); }
+.upload-panel .upload-label { display: grid; gap: 10px; min-width: 0; color: var(--text); font-size: 13px; font-weight: 600; }
+.upload-panel input[type="file"], .profile-avatar-actions input[type="file"] { display: block; width: 100%; max-width: 100%; min-height: 60px; padding: 7px; color: var(--muted); font-size: 13px; font-weight: 400; }
+.upload-panel input[type="file"]::file-selector-button, .profile-avatar-actions input[type="file"]::file-selector-button { min-height: 44px; max-width: 100%; margin-right: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--accent-tint); color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+.upload-panel input[type="file"]::file-selector-button:hover, .profile-avatar-actions input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
+.upload-panel .field-help { font-size: 12px; }
+.staged-files, .post-files, .unused-files { display: grid; gap: 9px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.staged-files:empty, .post-files:empty, .unused-files:empty { display: none; }
+.staged-files li, .post-files li, .unused-files li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; min-width: 0; padding: 9px 11px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--input); }
+.staged-files li > span, .unused-files li > span { min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+.staged-files button, .post-files button, .unused-files button { min-height: 44px; padding: 8px 10px; font-size: 12px; }
+.post-files { margin-top: 18px; }
+.file-caption { min-width: 0; color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.7; overflow-wrap: anywhere; }
+.post-files .field-help { grid-column: 1 / -1; font-size: 12px; }
+.post-files .field-help:empty { display: none; }
+.media-dialog { width: min(calc(100% - 40px), 960px); }
+.media-dialog h2 { font: 23px/1.4 var(--heading); }
+.media-dialog img { display: block; width: auto; height: auto; max-width: 100%; max-height: min(68dvh, 760px); margin: 20px auto; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--reading); object-fit: contain; }
+.profile-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.profile-heading h2 { font: 29px/1.25 var(--heading); }
+.profile-summary { min-width: 0; margin-block: 16px; padding: 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--reading); }
+.profile-avatar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; margin-block: 14px; }
+.profile-avatar-actions > label { flex: 1 1 100%; min-width: 0; }
+.profile-avatar-actions > input[type="file"] { flex: 1 1 100%; }
+.profile-avatar-actions button { min-height: 44px; }
+.profile-preview { min-width: 0; padding: 16px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--reading); font-size: 15px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.profile-preview > .field-help { margin-bottom: 10px; white-space: normal; }
+.unused-files { margin-top: 14px; }
+.progression-list { display: grid; gap: 12px; margin-block: 20px; padding: 0; list-style: none; }
+.progression-list > li { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--reading); }
+.progression-list > li[aria-current="step"], .progression-list > li.is-current { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent); }
+.progression-list h3, .progression-list strong { color: var(--text); font-size: 15px; font-weight: 650; line-height: 1.5; }
+.progression-list p, .progression-list small { color: var(--muted); font-size: 13px; line-height: 1.75; }
+.progression-list .member-level { justify-self: start; }
 .noscript-message { max-width: 700px; margin: 30px auto; padding: 20px; background: var(--surface); border: 1px solid var(--danger); color: var(--danger); }
 @media (min-width: 1650px) { .forum-hero { min-height: 456px; } .hero-copy { padding-top: 50px; } }
 @media (max-width: 1180px) {
@@ -467,6 +549,22 @@ button.topic-main, a.topic-main { display: block; border: 0; padding: 0; backgro
   .dialog-header h2 { font-size: 26px; }
   .dialog-header .eyebrow { font-size: 8px; }
   .dialog-description { font-size: 12px; }
+  .member-panel { padding: 16px; }
+  .member-line { gap: 10px; }
+  .member-name { font-size: 14px; }
+  .post-header > .member-line { flex-basis: 100%; }
+  .post-header > time { padding-top: 0; }
+  .composer-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; }
+  .composer-choice select { font-size: 16px; }
+  .composer-toolbar .emoji-toggle { grid-column: 1 / -1; justify-self: start; }
+  .emoji-picker { grid-template-columns: repeat(4, minmax(44px, 1fr)); gap: 6px; padding: 10px; }
+  .upload-panel { padding: 12px; }
+  .staged-files li, .post-files li, .unused-files li { gap: 6px 8px; padding: 8px; }
+  .staged-files button, .post-files button, .unused-files button { padding-inline: 7px; }
+  .profile-heading h2 { font-size: 26px; }
+  .profile-summary, .profile-preview, .progression-list > li { padding: 13px; }
+  .profile-avatar-actions .button { flex: 1 1 auto; }
+  .media-dialog img { max-height: 64dvh; margin-block: 16px; }
   .manifesto-list > li { padding-left: 35px; }
   .manifesto-list h3 { font-size: 19px; }
   .manifesto-list p { font-size: 12px; }
@@ -499,4 +597,6 @@ button.topic-main, a.topic-main { display: block; border: 0; padding: 0; backgro
   .hero-art { display: none; }
   .hero-copy { padding-top: 35px; }
   .button, .category-list button, .saved-toggle, .close-button, .search-field { border: 1px solid ButtonText; }
+  .member-avatar, .member-level, .staff-badge, .emoji-option, .composer-toolbar, .emoji-picker, .upload-panel, .profile-preview, .profile-summary, .progression-list > li { border: 1px solid CanvasText; }
+  .member-name, .color-default, .color-rose, .color-violet, .color-teal { color: CanvasText; }
 }

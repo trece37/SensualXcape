@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://oorheeyyahpyiarwktbq.supabase.co wss://oorheeyyahpyiarwktbq.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src https://oorheeyyahpyiarwktbq.supabase.co wss://oorheeyyahpyiarwktbq.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="description" content="Foro Cromos, la comunidad profesional privada de SensualXcape. Un espacio entre compañeras, con voz propia.">
   <title>Foro Cromos · Entre nosotras · SensualXcape</title>
-  <link rel="stylesheet" href="./forum.css">
-  <script type="module" src="./forum.js"></script>
+  <link rel="stylesheet" href="./forum.css?v=profiles-20261026">
+  <script type="module" src="./forum.js?v=profiles-20261026"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -30,7 +30,7 @@
           </select>
         </div>
         <span id="account-label" class="account-label" hidden></span>
-        <button id="profile-button" class="button button-quiet button-small" type="button" hidden>Cambiar alias</button>
+        <button id="profile-button" class="button button-quiet button-small" type="button" hidden>Mi perfil</button>
         <button id="login-open" class="button button-small" type="button">Entrar <span aria-hidden="true">↗</span></button>
         <button id="logout-button" class="button button-quiet button-small" type="button" hidden>Salir</button>
       </nav>
@@ -85,6 +85,7 @@
 
     <section id="forum-app" class="forum-layout" aria-label="Foro privado" hidden>
       <aside class="forum-sidebar">
+        <section id="my-community-card" class="surface member-panel" aria-label="Tu perfil y trayectoria" hidden></section>
         <div class="sidebar-block surface">
           <p class="eyebrow">Encuentra tu conversación</p>
           <h2 class="sidebar-title">Los espacios</h2>
@@ -93,6 +94,7 @@
             <button id="saved-toggle" class="saved-toggle" type="button" aria-pressed="false"><span aria-hidden="true">☆</span> Mis guardados</button>
             <button id="report-open" class="saved-toggle" type="button"><span aria-hidden="true">◇</span> Aviso confidencial</button>
             <button id="moderation-button" class="saved-toggle" type="button" hidden><span aria-hidden="true">✦</span> Moderación</button>
+            <button id="progression-button" class="saved-toggle" type="button"><span aria-hidden="true">✧</span> Trayectoria y roles</button>
           </div>
         </div>
         <div class="sidebar-note">

@@ -37,7 +37,7 @@ test('the Pages build keeps root V1 byte-for-byte and places the current app onl
   assert.deepEqual(await readFile(join(output, 'v2', 'assets', 'v2', 'cofre-closed.png')), await readFile(join(root, 'assets', 'v2', 'cofre-closed.png')));
   const forum = await readFile(join(output, 'foro', 'index.html'), 'utf8');
   assert.match(forum, /connect-src https:\/\/oorheeyyahpyiarwktbq\.supabase\.co wss:\/\/oorheeyyahpyiarwktbq\.supabase\.co/u);
-  assert.match(forum, /src="\.\/forum\.js"/u);
+  assert.match(forum, /src="\.\/forum\.js\?v=profiles-20261026"/u);
   assert.match(v2, /href="\.\.\/foro\/"/u);
   const forumBundle = await readFile(join(output, 'foro', 'forum.js'), 'utf8');
   assert.match(forumBundle, /sb_publishable_/u);

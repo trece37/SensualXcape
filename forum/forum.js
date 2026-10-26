@@ -1,11 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import { FORUM_CONFIG } from './config.js';
 import { CATEGORIES, SEED_TOPICS, PRINCIPLES } from './content.js';
+import { DEFAULT_STYLE, normalizeStyle, renderBody as styledBody, attachComposer, PROFILE_STAGES, describeProgress, normalizeAvatar } from './community.js';
+import { FILE_ACCEPT, fileSize, uploadReserved, removeReserved, downloadPrivate } from './files.js';
 
 export function friendlyError(error) {
   const text = String(error?.message || error || '');
   if (/invalid login/i.test(text)) return 'El correo o la contraseña no coinciden.';
   if (/email not confirmed/i.test(text)) return 'Confirma tu correo antes de entrar.';
+  if (/fc_file_too_large/.test(text)) return `Ese archivo supera el límite de ${text.split(':')[1] || '950 KB'}. Reduce su tamaño antes de subirlo.`;
+  if (/fc_file_type|mime/i.test(text)) return 'Este tipo de archivo no se admite. Puedes adjuntar imágenes, PDF, texto, audio o vídeo.';
+  if (/fc_empty_file/.test(text)) return 'El archivo está vacío. Elige otro.';
+  if (/fc_.*(quota|storage|staging|daily)/i.test(text)) return 'Has alcanzado un cupo de archivos. Revisa los archivos sin publicar en Mi perfil o vuelve mañana.';
+  if (/fc_.*file/i.test(text)) return 'No se pudo preparar el archivo. Comprueba su tamaño y vuelve a intentarlo.';
+  if (/^(Elige una imagen|Este navegador|No se ha podido)/.test(text)) return text;
   if (/rate|limit|too many/i.test(text)) return 'Hay varias peticiones seguidas. Espera un momento y vuelve a intentarlo.';
   if (/invalid_alias/i.test(text)) return 'Elige un alias de 2 a 36 caracteres, sin correo electrónico ni saltos de línea.';
   if (/closed|cerrad/i.test(text)) return 'Este hilo está cerrado a nuevas aportaciones.';
@@ -21,6 +29,8 @@ export function createForum({ client, doc = document, win = window }) {
   let savedOnly = false, busy = false, reportTarget = null, authBusy = false, destroyed = false, preview = true;
   let searchTimer, replyPage = 0, replyCount = 0;
   const drafts = new Map(), moderationPages = { members: 0, reports: 0, topics: 0, replies: 0 };
+  const cards = new Map(), cardTimes = new Map(), staged = new Map(), styleDrafts = new Map(), objectUrls = new Map(), avatarLoads = new Map(), uploadsBusy = new Set();
+  let visibleFiles = [], uploadPolicy = { attachment_limit: 950000, founder: false }, profileVersion = 0;
   const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
   const show = (id, yes) => { if ($(id)) $(id).hidden = !yes; };
   const say = (id, text) => { if ($(id)) { $(id).textContent = text; if (id === 'app-status') $(id).hidden = !text; } };
@@ -32,6 +42,121 @@ export function createForum({ client, doc = document, win = window }) {
   const button = (text, action, cls = 'button secondary') => { const n = el('button', cls, text); n.type = 'button'; n.addEventListener('click', action); return n; };
   const dialog = id => { if ($(id)?.showModal && !$(id).open) $(id).showModal(); };
   const close = id => $(id)?.close();
+  const capture = () => {
+    const scope = epoch, actor = session?.user.id;
+    return () => { if (destroyed || scope !== epoch || actor !== session?.user.id || !admitted()) throw Object.assign(new Error('session_changed'), { code: 'FC_SESSION_CHANGED' }); };
+  };
+  const topicComposer = attachComposer({ doc, textarea: $('topic-body-input') });
+  const replyComposer = attachComposer({ doc, textarea: $('reply-body'), onStyleChange: value => { if (current) styleDrafts.set(current.id, value); } });
+  $('topic-body-input').before(topicComposer.element); $('reply-body').before(replyComposer.element);
+  const topicUploads = uploadPanel(() => 'new-topic'), replyUploads = uploadPanel(() => current?.id);
+  $('topic-body-input').after(topicUploads.element); $('reply-body').after(replyUploads.element);
+
+  function revokeUrls() {
+    for (const value of objectUrls.values()) win.URL.revokeObjectURL(value);
+    objectUrls.clear(); avatarLoads.clear();
+  }
+  function localUrl(id, blob) {
+    if (objectUrls.has(id)) win.URL.revokeObjectURL(objectUrls.get(id));
+    const url = win.URL.createObjectURL(blob); objectUrls.set(id, url); return url;
+  }
+  function uploadPanel(key) {
+    const element = el('section', 'upload-panel'), label = el('label', 'upload-label', '📎 Adjuntar archivos'), input = el('input');
+    input.type = 'file'; input.multiple = true; input.accept = FILE_ACCEPT; input.setAttribute('aria-label', 'Adjuntar archivos'); label.append(input);
+    const help = el('p', 'field-help'), list = el('ul', 'staged-files'), status = el('p', 'form-status'); status.setAttribute('role', 'status');
+    element.append(label, help, list, status);
+    function render() {
+      const id = key(), files = staged.get(id) || []; list.replaceChildren();
+      help.textContent = `Hasta 3 archivos por mensaje · ${fileSize(uploadPolicy.attachment_limit)} por archivo${uploadPolicy.founder ? ' · acceso fundador' : ''}. Se descargan solo al abrirlos.`;
+      input.disabled = uploadsBusy.has(id);
+      for (const file of files) { const li = el('li'); li.append(el('span', '', `${file.file_name} · ${fileSize(file.byte_size)}`), button('Quitar', async () => {
+        const check = capture(); try { await removeReserved({ file, client, rpc, check }); staged.set(id, (staged.get(id) || []).filter(f => f.id !== file.id)); render(); } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') status.textContent = friendlyError(error); }
+      }, 'text-button')); list.append(li); }
+    }
+    input.addEventListener('change', async () => {
+      const id = key(), check = capture(), selected = [...input.files]; input.value = '';
+      if (!id || uploadsBusy.has(id)) return;
+      if ((staged.get(id)?.length || 0) + selected.length > 3) { status.textContent = 'Puedes adjuntar un máximo de tres archivos por mensaje.'; return; }
+      uploadsBusy.add(id); render();
+      try {
+        for (const file of selected) {
+          status.textContent = `Subiendo ${file.name}…`;
+          const ready = await uploadReserved({ file, client, rpc, check, limit: uploadPolicy.attachment_limit }); check();
+          staged.set(id, [...(staged.get(id) || []), ready]);
+        }
+        status.textContent = 'Archivos preparados. Se compartirán cuando publiques el mensaje.';
+      } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') status.textContent = friendlyError(error); }
+      finally { uploadsBusy.delete(id); if (admitted()) render(); }
+    });
+    return { element, render, clear() { list.replaceChildren(); status.textContent = ''; input.value = ''; } };
+  }
+  function avatar(card) {
+    const node = el('span', 'member-avatar', (card?.alias || 'C').slice(0, 1).toLocaleUpperCase('es')); node.setAttribute('aria-hidden', 'true');
+    if (!card?.avatar) return node;
+    const file = card.avatar, sessionCheck = capture();
+    const check = () => { sessionCheck(); if (card.user_id && cards.get(card.user_id)?.avatar?.id !== file.id) throw Object.assign(new Error('avatar_changed'), { code: 'FC_SESSION_CHANGED' }); };
+    const paint = url => { if (!node.isConnected) return; const img = el('img'); img.src = url; img.alt = ''; img.width = 48; img.height = 48; node.replaceChildren(img); };
+    if (objectUrls.has(file.id)) win.queueMicrotask(() => paint(objectUrls.get(file.id)));
+    else {
+      if (!avatarLoads.has(file.id)) avatarLoads.set(file.id, downloadPrivate({ file, client, check }).then(blob => { check(); return localUrl(file.id, blob); }).catch(() => null).finally(() => avatarLoads.delete(file.id)));
+      avatarLoads.get(file.id).then(url => { try { check(); if (url) paint(url); } catch {} });
+    }
+    return node;
+  }
+  function memberLine(id, { detailed = false } = {}) {
+    const card = cards.get(id), line = el('div', detailed ? 'member-line detailed' : 'member-line');
+    if (!card) { line.append(el('strong', '', author(id))); return line; }
+    const progress = describeProgress(card), info = el('div', 'member-info');
+    info.append(button(card.alias, () => showMemberCard(card), 'member-name'));
+    const badges = el('div', 'member-badges'); badges.append(el('span', 'member-level', progress.stage.label));
+    if (card.role === 'moderator' || card.role === 'helper') badges.append(el('span', 'staff-badge', card.role === 'moderator' ? 'Moderación' : 'Ayudante'));
+    info.append(badges);
+    if (detailed) { info.append(el('span', 'member-stats', `${card.topic_count || 0} temas · ${card.reply_count || 0} respuestas · ${progress.days} días aquí`)); if (card.tagline) info.append(el('p', 'member-tagline', card.tagline)); }
+    line.append(avatar(card), info); return line;
+  }
+  function renderSelf() {
+    const panel = $('my-community-card'); panel.replaceChildren(); show('my-community-card', admitted());
+    if (!admitted()) return;
+    const card = cards.get(session?.user.id); if (card) panel.append(memberLine(card.user_id, { detailed: true }), button('Editar mi perfil', openProfile, 'text-button'));
+  }
+  function showMemberCard(card) {
+    let d = $('member-dialog'); if (!d) { d = el('dialog', 'forum-dialog'); d.id = 'member-dialog'; doc.body.append(d); }
+    d.dataset.userId = card.user_id;
+    d.replaceChildren(el('h2', '', 'Una voz de la comunidad'), memberLine(card.user_id, { detailed: true }), el('p', 'field-help', `Se unió el ${date(card.created_at)}. El rango reconoce trayectoria; no garantiza la veracidad de sus mensajes.`), button('Cerrar', () => d.close())); d.showModal();
+  }
+  function renderFiles(container, records) {
+    if (!records.length) return;
+    const list = el('ul', 'post-files');
+    for (const file of records) {
+      const item = el('li'), status = el('span', 'field-help');
+      item.append(el('span', 'file-caption', `${file.file_name} · ${fileSize(file.byte_size)}`));
+      const isImage = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mime_type);
+      const access = button(isImage ? 'Ver imagen' : 'Descargar', async () => {
+        const sessionCheck = capture(), origin = current?.id;
+        const check = () => { sessionCheck(); if (origin !== current?.id || !visibleFiles.some(f => f.id === file.id)) throw Object.assign(new Error('file_no_longer_visible'), { code: 'FC_SESSION_CHANGED' }); };
+        access.disabled = true; status.textContent = 'Abriendo…';
+        try {
+          const blob = await downloadPrivate({ file, client, check }); check();
+          if (isImage) {
+            let d = $('media-dialog'); if (!d) { d = el('dialog', 'forum-dialog media-dialog'); d.id = 'media-dialog'; doc.body.append(d); }
+            const img = el('img'); img.alt = file.file_name; img.src = localUrl(`media-${file.id}`, blob);
+            d.replaceChildren(el('h2', '', file.file_name), img, button('Cerrar imagen', () => { d.close(); const id = `media-${file.id}`; win.URL.revokeObjectURL(objectUrls.get(id)); objectUrls.delete(id); })); d.showModal();
+          } else {
+            const url = localUrl(`download-${file.id}`, new win.Blob([blob], { type: 'application/octet-stream' })), link = el('a'); link.href = url; link.download = file.file_name; doc.body.append(link); link.click(); link.remove();
+            win.setTimeout(() => { if (objectUrls.get(`download-${file.id}`) === url) { win.URL.revokeObjectURL(url); objectUrls.delete(`download-${file.id}`); } }, 1000);
+          }
+          status.textContent = '';
+        } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') status.textContent = friendlyError(error); }
+        finally { access.disabled = false; }
+      }, 'text-button'); item.append(access);
+      if (file.owner_id === session?.user.id) item.append(button('Retirar archivo', async () => {
+        if (!win.confirm('¿Retirar este archivo del mensaje?')) return;
+        try { await removeReserved({ file, client, rpc, check: capture() }); if (current) await openTopic(current, { quiet: true }); } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') status.textContent = friendlyError(error); }
+      }, 'text-button'));
+      item.append(status); list.append(item);
+    }
+    container.append(list);
+  }
   const expired = error => ['PGRST301', 'PGRST302', '401'].includes(String(error?.code)) || error?.status === 401 || /jwt.*(expired|invalid)|invalid.*jwt/i.test(String(error?.message || ''));
   function expireAccess() {
     epoch++; clearPrivate(); session = null; member = null; updateGate(); refreshList();
@@ -46,17 +171,20 @@ export function createForum({ client, doc = document, win = window }) {
   async function transact(form, status, operation) {
     if (form.dataset.busy === 'true') return;
     form.dataset.busy = 'true';
-    const controls = [...form.querySelectorAll('button')]; controls.forEach(c => c.disabled = true);
+    const controls = [...form.querySelectorAll('button,input,textarea,select')].map(node => [node, node.disabled]); controls.forEach(([node]) => node.disabled = true);
     try { say(status, 'Guardando…'); await operation(); }
     catch (error) { if (error?.code !== 'FC_SESSION_CHANGED') say(status, friendlyError(error)); }
-    finally { form.dataset.busy = 'false'; controls.forEach(c => c.disabled = false); }
+    finally { form.dataset.busy = 'false'; controls.forEach(([node, disabled]) => node.disabled = disabled); }
   }
   function clearPrivate() {
     topics = []; aliases.clear(); saves.clear(); current = null; topicVersion++; listVersion++;
+    cards.clear(); cardTimes.clear(); staged.clear(); styleDrafts.clear(); visibleFiles = []; profileVersion++; revokeUrls();
+    uploadPolicy = { attachment_limit: 950000, founder: false }; uploadsBusy.clear(); topicComposer.reset(); replyComposer.reset(); topicUploads.clear(); replyUploads.clear();
     for (const id of ['topics-list', 'topic-posts', 'topic-body', 'topic-controls', 'moderation-list', 'topic-title', 'topic-author', 'topic-category', 'topic-status', 'reply-status', 'report-status']) $(id)?.replaceChildren();
     for (const id of ['topic-title-input', 'topic-body-input', 'reply-body', 'report-body', 'auth-password']) if ($(id)) $(id).value = '';
     for (const id of ['topic-dialog', 'report-dialog']) close(id);
-    for (const id of ['edit-dialog', 'profile-dialog', 'recovery-dialog']) { close(id); $(id)?.remove(); }
+    for (const id of ['edit-dialog', 'profile-dialog', 'recovery-dialog', 'member-dialog', 'media-dialog']) { close(id); $(id)?.remove(); }
+    $('my-community-card')?.replaceChildren(); show('my-community-card', false);
     reportTarget = null; savedOnly = false; page = 0;
     drafts.clear(); replyPage = 0; replyCount = 0;
     $('saved-toggle')?.setAttribute('aria-pressed', 'false');
@@ -71,6 +199,7 @@ export function createForum({ client, doc = document, win = window }) {
     show('join-form', !!session && !member);
     show('forum-app', true); show('new-topic-button', active); show('moderation-button', moderator());
     show('profile-button', active); show('saved-toggle', active); show('report-open', active);
+    show('my-community-card', active); show('progression-button', active);
     if (member?.status === 'pending') say('join-message', 'Tu solicitud está pendiente de admisión. Puedes consultar aquí su estado.');
     else if (member?.status === 'suspended') say('join-message', 'Tu acceso a la comunidad está suspendido. Las conversaciones privadas no están disponibles.');
     else if (!session) say('join-message', 'Entra o crea tu cuenta para solicitar acceso. Los títulos de apertura son del equipo; las conversaciones requieren admisión.');
@@ -113,12 +242,18 @@ export function createForum({ client, doc = document, win = window }) {
   }
   async function loadAliases(ids) {
     const scope = epoch;
-    const missing = [...new Set(ids.filter(Boolean))].filter(id => !aliases.has(id));
+    const missing = [...new Set(ids.filter(Boolean))].filter(id => !cards.has(id) || Date.now() - (cardTimes.get(id) || 0) > 60000);
     if (!missing.length) return;
-    const { data, error } = await client.from('fc_members').select('user_id,alias').in('user_id', missing);
-    if (error) throw error;
+    const data = await rpc('fc_profile_cards', { p_ids: missing });
     if (scope !== epoch) return;
-    for (const a of data || []) aliases.set(a.user_id, a.alias);
+    const returned = new Set((data || []).map(card => card.user_id));
+    for (const id of missing) if (!returned.has(id)) {
+      const avatarId = cards.get(id)?.avatar?.id, url = objectUrls.get(avatarId);
+      if (url) win.URL.revokeObjectURL(url); objectUrls.delete(avatarId); cards.delete(id); cardTimes.delete(id); aliases.delete(id);
+      if ($('member-dialog')?.dataset.userId === id) { close('member-dialog'); $('member-dialog')?.remove(); }
+    }
+    for (const a of data || []) { aliases.set(a.user_id, a.alias); cards.set(a.user_id, a); cardTimes.set(a.user_id, Date.now()); }
+    renderSelf();
   }
   async function refreshList({ quiet = false } = {}) {
     if (destroyed) return;
@@ -151,26 +286,27 @@ export function createForum({ client, doc = document, win = window }) {
       renderTopics(); say('app-status', win.navigator.onLine === false ? 'Sin conexión.' : 'Conversaciones actualizadas.');
     } catch (error) { if (scope === epoch && version === listVersion) { if (expired(error)) expireAccess(); else say('app-status', friendlyError(error)); } }
   }
-  function renderBody(container, text) {
-    container.replaceChildren();
-    // Plain text deliberately avoids HTML, embeds and remote preview requests.
-    for (const part of String(text || '').split(/\n\s*\n/)) container.append(el('p', '', part));
+  function renderBody(container, text, style) {
+    container.replaceChildren(styledBody(doc, text, style));
   }
   function renderTopic(topic, posts = []) {
     if (current?.id !== topic.id) {
       if (current && admitted()) drafts.set(current.id, $('reply-body').value);
+      if (current && admitted()) styleDrafts.set(current.id, replyComposer.getStyle());
       $('reply-body').value = drafts.get(topic.id) || '';
+      replyComposer.setStyle(styleDrafts.get(topic.id) || cards.get(session?.user.id) || DEFAULT_STYLE);
       say('reply-status', '');
     }
     current = topic; show('list-view', false); show('topic-view', true);
     say('topic-category', catLabel(topic.category)); say('topic-title', topic.title);
-    say('topic-author', `${topic.editorial ? 'Equipo Foro Cromos' : author(topic.author_id)} · ${date(topic.created_at)}`);
-    renderBody($('topic-body'), topic.body);
+    $('topic-author').replaceChildren(topic.editorial ? el('span', '', 'Equipo Foro Cromos') : memberLine(topic.author_id, { detailed: true }), el('span', '', date(topic.created_at)));
+    renderBody($('topic-body'), topic.body, topic.style);
+    renderFiles($('topic-body'), visibleFiles.filter(f => f.topic_id === topic.id && !f.reply_id));
     const postList = $('topic-posts'); postList.replaceChildren();
     for (const post of posts) {
       const card = el('article', 'post'), header = el('div', 'post-header');
-      header.append(el('strong', '', author(post.author_id)), el('span', '', date(post.created_at))); card.append(header);
-      const body = el('div', 'post-body'); renderBody(body, post.body); card.append(body);
+      header.append(memberLine(post.author_id, { detailed: true }), el('span', '', date(post.created_at))); card.append(header);
+      const body = el('div', 'post-body'); renderBody(body, post.body, post.style); renderFiles(body, visibleFiles.filter(f => f.reply_id === post.id)); card.append(body);
       const actions = el('div', 'post-actions');
       if (post.author_id === session?.user.id && !post.withdrawn_at) {
         if (!topic.closed) actions.append(button('Editar', () => editText('reply', post), 'text-button'));
@@ -203,6 +339,7 @@ export function createForum({ client, doc = document, win = window }) {
       }
     } else controls.append(button('Entrar para participar', () => dialog('auth-dialog'), 'button primary'));
     show('reply-form', admitted() && !topic.closed && !topic.hidden);
+    replyUploads.render();
     say('topic-status', topic.closed ? 'Hilo cerrado. Puedes leerlo y avisar a moderación.' : preview ? 'Apertura editorial. El contenido de la comunidad requiere acceso.' : 'Responde a tu ritmo. Tu alias será visible para la comunidad admitida.');
   }
   async function openTopic(topic, { quiet = false } = {}) {
@@ -220,9 +357,23 @@ export function createForum({ client, doc = document, win = window }) {
       ]);
       if (head.error) throw head.error; if (posts.error) throw posts.error;
       if (scope !== epoch || version !== topicVersion) return;
-      if (!head.data) { current = null; show('topic-view', false); show('list-view', true); say('app-status', 'Este hilo ya no está disponible.'); await refreshList(); return; }
+      if (!head.data) {
+        current = null; visibleFiles = []; close('media-dialog'); $('media-dialog')?.replaceChildren(); revokeUrls();
+        for (const id of ['topic-title','topic-author','topic-body','topic-posts','topic-controls']) $(id)?.replaceChildren();
+        renderSelf(); show('topic-view', false); show('list-view', true); say('app-status', 'Este hilo ya no está disponible.'); await refreshList(); return;
+      }
       await loadAliases([head.data.author_id, ...(posts.data || []).map(p => p.author_id)]);
       if (scope !== epoch || version !== topicVersion) return;
+      const replies = (posts.data || []).map(p => p.id);
+      const [topicFiles, replyFiles] = await Promise.all([
+        client.from('fc_files').select('*').eq('topic_id', topic.id).is('reply_id', null).eq('status', 'linked'),
+        replies.length ? client.from('fc_files').select('*').in('reply_id', replies).eq('status', 'linked') : { data: [] }
+      ]);
+      if (topicFiles.error) throw topicFiles.error; if (replyFiles.error) throw replyFiles.error;
+      if (scope !== epoch || version !== topicVersion) return;
+      const nextFiles = [...(topicFiles.data || []), ...(replyFiles.data || [])], allowedIds = new Set([...nextFiles.map(f => `media-${f.id}`), ...cards.values()].map(c => typeof c === 'string' ? c : c.avatar?.id).filter(Boolean));
+      for (const [key, url] of objectUrls) if (!key.startsWith('download-') && !allowedIds.has(key)) { win.URL.revokeObjectURL(url); objectUrls.delete(key); if (key.startsWith('media-')) { close('media-dialog'); $('media-dialog')?.replaceChildren(); } }
+      visibleFiles = nextFiles;
       replyCount = posts.count || 0; renderTopic(head.data, posts.data || []);
       if (!quiet) $('topic-title')?.focus();
     } catch (error) { if (scope === epoch && version === topicVersion) { if (expired(error)) expireAccess(); else say('app-status', friendlyError(error)); } }
@@ -242,8 +393,77 @@ export function createForum({ client, doc = document, win = window }) {
     d.replaceChildren(); const form = el('form', 'dialog-form'), heading = el('h2', '', 'Editar mi texto');
     const label = el('label', '', 'Tu texto'), area = el('textarea'); area.rows = 8; area.required = true; area.maxLength = kind === 'topic' ? 5000 : 3000; area.value = post.body; label.append(area);
     const status = el('p', 'form-status'); status.id = 'edit-status'; status.setAttribute('role', 'status');
-    const submit = el('button', 'button primary', 'Guardar cambios'); submit.type = 'submit'; form.append(heading, label, status, submit, button('Cancelar', () => d.close())); d.append(form);
-    form.addEventListener('submit', event => { event.preventDefault(); transact(form, 'edit-status', async () => { await rpc('fc_edit', { p_kind: kind, p_id: post.id, p_body: area.value.trim() }); d.close(); if (current) await openTopic(current, { quiet: true }); await refreshList(); }); }); d.showModal();
+    const composer = attachComposer({ doc, textarea: area, style: post.style });
+    const submit = el('button', 'button primary', 'Guardar cambios'); submit.type = 'submit'; form.append(heading, composer.element, label, status, submit, button('Cancelar', () => d.close())); d.append(form);
+    form.addEventListener('submit', event => { event.preventDefault(); transact(form, 'edit-status', async () => { await rpc('fc_update_post', { p_kind: kind, p_id: post.id, p_body: area.value.trim(), p_style: composer.getStyle() }); d.close(); if (current) await openTopic(current, { quiet: true }); await refreshList(); }); }); d.showModal();
+  }
+  function openProfile() {
+    if (!admitted()) return;
+    let d = $('profile-dialog'); if (d?.open) return;
+    if (!d) { d = el('dialog', 'forum-dialog wide-dialog'); d.id = 'profile-dialog'; doc.body.append(d); }
+    const check = capture(), version = ++profileVersion, card = cards.get(session.user.id) || member;
+    let chosenAvatar = card.avatar || null, avatarBusy = false;
+    const valid = () => { check(); if (version !== profileVersion || !d.open) throw Object.assign(new Error('profile_closed'), { code: 'FC_SESSION_CHANGED' }); };
+    d.replaceChildren(); d.setAttribute('aria-labelledby', 'profile-heading');
+    const form = el('form', 'dialog-form stack-form'), heading = el('h2', '', 'Mi perfil de Foro Cromos'); heading.id = 'profile-heading';
+    const subtitle = el('p', 'dialog-description', 'Tu identidad aquí es propia del foro. Tú eliges el alias, la imagen y la frase que compartes con las compañeras admitidas.');
+    const summary = el('div', 'profile-summary'); summary.append(memberLine(session.user.id, { detailed: true }));
+    const aliasLabel = el('label', '', 'Tu alias en el foro'), alias = el('input'); alias.id = 'profile-alias'; alias.value = member.alias; alias.required = true; alias.minLength = 2; alias.maxLength = 36; alias.autocomplete = 'nickname'; aliasLabel.htmlFor = alias.id;
+    const phraseLabel = el('label', '', 'Tu frase personal'), phrase = el('input'); phrase.id = 'profile-tagline'; phrase.value = card.tagline || ''; phrase.maxLength = 160; phrase.placeholder = 'Una frase tuya, si te apetece'; phraseLabel.htmlFor = phrase.id;
+    const avatarLabel = el('label', '', 'Tu avatar'), input = el('input'); input.id = 'profile-avatar'; input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp'; avatarLabel.htmlFor = input.id;
+    const image = el('div', 'profile-avatar-actions'); image.append(avatar(card));
+    const status = el('p', 'form-status'); status.id = 'profile-status'; status.setAttribute('role', 'status');
+    const previewLabel = el('label', '', 'Tu estilo de escritura preferido'), area = el('textarea'); area.id = 'profile-preview'; area.rows = 2; area.maxLength = 160; area.value = card.tagline || 'Mi voz, a mi manera. ✨'; previewLabel.htmlFor = area.id;
+    const composer = attachComposer({ doc, textarea: area, style: card });
+    const save = el('button', 'button primary', 'Guardar mi perfil'); save.type = 'submit';
+    image.append(button('Quitar avatar', () => { if (avatarBusy) return; chosenAvatar = null; image.replaceChildren(avatar({ alias: alias.value }), button('Sin imagen · puedes elegir otra arriba', () => input.click(), 'text-button')); }, 'text-button'));
+    form.append(heading, subtitle, summary, avatarLabel, input, image, el('p', 'field-help', 'JPEG, PNG o WebP · hasta 950 KB. Guardamos una copia cuadrada de 256 píxeles y retiramos los metadatos de la imagen.'), aliasLabel, alias, phraseLabel, phrase, previewLabel, composer.element, area, status, save, button('Cerrar sin guardar', () => d.close()));
+    const unused = el('section', 'unused-files'), unusedStatus = el('p', 'field-help'), unusedList = el('ul', 'staged-files');
+    unused.append(el('h3', '', 'Archivos sin publicar'), el('p', 'field-help', 'Aquí puedes eliminar subidas que dejaste a medias y avatares sustituidos. Cancelar una subida no recupera el cupo de reservas del día.'), unusedStatus, unusedList);
+    async function loadUnused() {
+      try {
+        const files = await rpc('fc_my_files'); valid(); unusedList.replaceChildren();
+        const candidates = (files || []).filter(file => file.id !== chosenAvatar?.id);
+        unusedStatus.textContent = candidates.length ? `${candidates.length} archivos pendientes de limpieza.` : 'No tienes archivos pendientes de limpieza.';
+        for (const file of candidates) {
+          const row = el('li'); row.append(el('span', '', `${file.file_name} · ${fileSize(file.byte_size)}`), button('Eliminar archivo', async () => {
+            try {
+              await removeReserved({ file, client, rpc, check: valid }); valid();
+              for (const [key, values] of staged) staged.set(key, values.filter(f => f.id !== file.id)); topicUploads.render(); replyUploads.render(); await loadUnused();
+            } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') unusedStatus.textContent = friendlyError(error); }
+          }, 'text-button')); unusedList.append(row);
+        }
+      } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') unusedStatus.textContent = friendlyError(error); }
+    }
+    unused.prepend(button('Revisar archivos pendientes', loadUnused, 'text-button'));
+    d.append(form, unused); d.addEventListener('close', () => { if (version === profileVersion) profileVersion++; composer.destroy(); }, { once: true }); d.showModal();
+    input.addEventListener('change', async () => {
+      const file = input.files[0]; input.value = ''; if (!file || avatarBusy) return;
+      avatarBusy = true; save.disabled = true; input.disabled = true; status.textContent = 'Preparando tu avatar…';
+      try {
+        const normalized = await normalizeAvatar(file, { win }); valid();
+        const ready = await uploadReserved({ file: normalized, purpose: 'avatar', limit: 950000, client, rpc, check: valid }); valid();
+        const previous = chosenAvatar;
+        chosenAvatar = { id: ready.id, bucket_id: ready.bucket_id, object_path: ready.object_path };
+        image.replaceChildren(avatar({ alias: alias.value, avatar: chosenAvatar }), button('Cambiar imagen', () => input.click(), 'text-button'), button('Quitar avatar', () => { chosenAvatar = null; image.replaceChildren(avatar({ alias: alias.value })); }, 'text-button'));
+        status.textContent = 'Avatar preparado. Pulsa Guardar mi perfil para usarlo.';
+        if (previous && previous.id !== card.avatar?.id) await removeReserved({ file: previous, client, rpc, check: valid });
+      } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') status.textContent = friendlyError(error); }
+      finally { avatarBusy = false; if (version === profileVersion) { save.disabled = false; input.disabled = false; } }
+    });
+    form.addEventListener('submit', event => {
+      event.preventDefault(); if (avatarBusy) return;
+      transact(form, 'profile-status', async () => {
+        const profile = await rpc('fc_profile_details', { p_alias: alias.value.trim(), p_tagline: phrase.value.trim(), p_avatar: chosenAvatar?.id || null, p_font: composer.getStyle().font, p_color: composer.getStyle().color }); valid();
+        member = { ...member, alias: profile.alias }; aliases.set(profile.user_id, profile.alias); cards.set(profile.user_id, profile); cardTimes.set(profile.user_id, Date.now());
+        if (card.avatar && card.avatar.id !== profile.avatar?.id) { const oldUrl = objectUrls.get(card.avatar.id); if (oldUrl) win.URL.revokeObjectURL(oldUrl); objectUrls.delete(card.avatar.id); removeReserved({ file: card.avatar, client, rpc, check }).catch(() => {}); }
+        if (!$('topic-body-input').value) topicComposer.setStyle(profile); if (!$('reply-body').value) replyComposer.setStyle(profile);
+        updateGate(); renderSelf(); d.close(); say('app-status', 'Tu perfil de Foro Cromos está guardado.'); await refreshList({ quiet: true }); if (current) await openTopic(current, { quiet: true });
+      });
+    });
+    const progress = describeProgress(card);
+    summary.append(el('p', 'field-help', `En la comunidad desde el ${date(card.created_at)}. ${progress.nextStage ? `Siguiente etapa: ${progress.nextStage.label}.` : 'Has alcanzado la etapa veterana.'}`));
+    loadUnused();
   }
   function openReport(topicId = null, replyId = null) { reportTarget = { topicId, replyId }; say('report-status', 'Tu aviso solo se muestra a moderación y en su registro. No se publica en el hilo.'); dialog('report-dialog'); }
   async function moderate(action, target) {
@@ -277,7 +497,16 @@ export function createForum({ client, doc = document, win = window }) {
       const row = el('article', 'moderation-row'); row.append(el('strong', '', m.alias), el('span', 'topic-badge', m.status === 'pending' ? 'Pendiente' : m.status === 'active' ? 'Admitida' : 'Suspendida'));
       if (m.user_id !== session.user.id) row.append(button(m.status === 'active' ? 'Suspender acceso' : 'Admitir', async () => {
         try { await rpc('fc_admit', { p_user_id: m.user_id, p_status: m.status === 'active' ? 'suspended' : 'active' }); await loadModeration(); } catch (error) { say('app-status', friendlyError(error)); }
-      })); list.append(row);
+      }));
+      if (uploadPolicy.founder && m.status === 'active' && m.user_id !== session.user.id) {
+        const label = el('label', '', `Función de ${m.alias}`), select = el('select'); select.setAttribute('aria-label', `Función de ${m.alias}`);
+        for (const [value, text] of [['member', 'Compañera'], ['helper', 'Ayudante'], ['moderator', 'Moderación']]) { const option = el('option', '', text); option.value = value; select.append(option); } select.value = m.role; label.append(select);
+        row.append(label, button('Aplicar función', async () => {
+          if (!win.confirm(`¿Asignar a ${m.alias} la función «${select.selectedOptions[0].textContent}»? La moderación permite revisar avisos confidenciales y gestionar el acceso. Acuerda antes esta responsabilidad con ella.`)) return;
+          try { await rpc('fc_assign_role', { p_user_id: m.user_id, p_role: select.value }); cards.delete(m.user_id); await loadModeration(); say('app-status', 'Función actualizada.'); } catch (error) { say('app-status', friendlyError(error)); }
+        }, 'text-button'));
+      }
+      list.append(row);
     }
     paginate('members', members, 50);
     list.append(el('h3', '', 'Avisos confidenciales'));
@@ -323,8 +552,20 @@ export function createForum({ client, doc = document, win = window }) {
       if (scope !== epoch) return;
       const result = await client.from('fc_members').select('*').eq('user_id', verified.data.user.id).maybeSingle(); if (result.error) throw result.error;
       if (scope !== epoch) return;
-      member = result.data; updateGate(); if (changed || !admitted()) await refreshList(); else await refreshList({ quiet: true });
+      member = result.data; updateGate();
+      if (admitted()) {
+        await hydrateSelf(); if (scope !== epoch) return;
+      }
+      if (changed || !admitted()) await refreshList(); else await refreshList({ quiet: true });
     } catch (error) { if (scope === epoch) { clearPrivate(); updateGate(); await refreshList(); say('join-message', friendlyError(error)); } }
+  }
+  async function hydrateSelf() {
+    const scope = epoch, actor = session.user.id;
+    const policy = await rpc('fc_upload_policy'); if (scope !== epoch) return; uploadPolicy = policy;
+    await loadAliases([actor]); if (scope !== epoch) return;
+    if (!$('topic-body-input').value) topicComposer.setStyle(cards.get(actor));
+    if (!$('reply-body').value) replyComposer.setStyle(cards.get(actor));
+    topicUploads.render(); replyUploads.render(); renderSelf();
   }
   const bind = (id, event, fn) => $(id)?.addEventListener(event, fn);
   bind('theme-select', 'change', () => { const theme = $('theme-select').value; doc.documentElement.dataset.theme = theme; doc.body.dataset.theme = theme; try { win.localStorage.setItem('sx-forum-theme', theme); } catch {} });
@@ -367,17 +608,22 @@ export function createForum({ client, doc = document, win = window }) {
   bind('search-input', 'input', () => { win.clearTimeout(searchTimer); searchTimer = win.setTimeout(() => { page = 0; refreshList(); }, 260); });
   bind('sort-select', 'change', () => { page = 0; refreshList(); });
   bind('saved-toggle', 'click', () => { savedOnly = !savedOnly; $('saved-toggle').setAttribute('aria-pressed', String(savedOnly)); page = 0; refreshList(); });
-  bind('new-topic-button', 'click', () => { say('topic-form-status', ''); dialog('topic-dialog'); });
+  bind('new-topic-button', 'click', () => { if (admitted()) { say('topic-form-status', ''); if (!$('topic-body-input').value) topicComposer.setStyle(cards.get(session.user.id)); topicUploads.render(); dialog('topic-dialog'); } });
   bind('topic-form', 'submit', e => { e.preventDefault(); transact(e.currentTarget, 'topic-form-status', async () => {
-    const topic = await rpc('fc_create_topic', { p_category: $('topic-category-input').value, p_title: $('topic-title-input').value.trim(), p_body: $('topic-body-input').value.trim() });
-    $('topic-form').reset(); close('topic-dialog'); page = 0; await refreshList(); await openTopic(topic);
+    if (uploadsBusy.has('new-topic')) throw new Error('fc_file_upload_pending');
+    const topic = await rpc('fc_publish', { p_kind: 'topic', p_topic_id: null, p_category: $('topic-category-input').value, p_title: $('topic-title-input').value.trim(), p_body: $('topic-body-input').value.trim(), p_style: topicComposer.getStyle(), p_files: (staged.get('new-topic') || []).map(f => f.id) });
+    staged.delete('new-topic'); topicUploads.clear(); cardTimes.delete(session.user.id); $('topic-form').reset(); close('topic-dialog'); page = 0; say('app-status', 'Tu tema está publicado.');
+    try { await loadAliases([session.user.id]); } catch (error) { if (error.code === 'FC_SESSION_CHANGED') throw error; say('app-status', 'Tu tema está publicado. No se pudo actualizar el contador; se intentará de nuevo.'); }
+    await refreshList(); await openTopic(topic);
   }); });
   bind('reply-form', 'submit', e => { e.preventDefault(); const topic = current, text = $('reply-body').value; transact(e.currentTarget, 'reply-status', async () => {
-    await rpc('fc_reply', { p_topic_id: topic.id, p_body: text.trim() }); drafts.delete(topic.id);
+    if (uploadsBusy.has(topic.id)) throw new Error('fc_file_upload_pending');
+    await rpc('fc_publish', { p_kind: 'reply', p_topic_id: topic.id, p_category: null, p_title: null, p_body: text.trim(), p_style: replyComposer.getStyle(), p_files: (staged.get(topic.id) || []).map(f => f.id) }); drafts.delete(topic.id); staged.delete(topic.id); styleDrafts.delete(topic.id); cardTimes.delete(session.user.id); replyUploads.render();
     if (current?.id === topic.id) { if ($('reply-body').value === text) $('reply-body').value = ''; replyPage = Math.floor(replyCount / 50); say('reply-status', 'Tu respuesta está publicada.'); await openTopic(topic, { quiet: true }); }
     else say('app-status', `Tu respuesta está publicada en «${topic.title}».`);
+    try { await loadAliases([session.user.id]); } catch (error) { if (error.code === 'FC_SESSION_CHANGED') throw error; say('app-status', 'Tu respuesta está publicada. No se pudo actualizar el contador; se intentará de nuevo.'); }
   }); });
-  bind('back-topics', 'click', () => { if (current && admitted()) drafts.set(current.id, $('reply-body').value); $('reply-body').value = ''; current = null; topicVersion++; show('topic-view', false); show('list-view', true); refreshList(); });
+  bind('back-topics', 'click', () => { if (current && admitted()) { drafts.set(current.id, $('reply-body').value); styleDrafts.set(current.id, replyComposer.getStyle()); } $('reply-body').value = ''; current = null; topicVersion++; show('topic-view', false); show('list-view', true); close('media-dialog'); $('media-dialog')?.replaceChildren(); refreshList(); });
   bind('report-open', 'click', () => openReport());
   bind('report-form', 'submit', e => { e.preventDefault(); transact(e.currentTarget, 'report-status', async () => { await rpc('fc_report', { p_topic_id: reportTarget?.topicId || null, p_reply_id: reportTarget?.replyId || null, p_body: $('report-body').value.trim() }); $('report-body').value = ''; say('report-status', 'Aviso guardado para moderación. No se ha publicado en el foro.'); }); });
   bind('open-manifesto', 'click', () => dialog('manifesto-dialog'));
@@ -385,12 +631,12 @@ export function createForum({ client, doc = document, win = window }) {
   for (const p of PRINCIPLES) { const item = el('li', 'principle'); item.append(el('h3', '', p.title), el('p', '', p.body)); principles.append(item); }
   const categorySelect = $('topic-category-input'); categorySelect.replaceChildren(); for (const c of CATEGORIES) { const option = el('option', '', c.label); option.value = c.id; categorySelect.append(option); }
   bind('moderation-button', 'click', () => { if (!$('moderation-panel').hidden) show('moderation-panel', false); else loadModeration(); });
-  bind('profile-button', 'click', () => {
-    if (!member) return;
-    let d = $('profile-dialog'); if (!d) { d = el('dialog', 'forum-dialog'); d.id = 'profile-dialog'; doc.body.append(d); }
-    d.replaceChildren(); const form = el('form', 'dialog-form'), label = el('label', '', 'Tu alias en la comunidad'), input = el('input'); input.value = member.alias; input.required = true; input.minLength = 2; input.maxLength = 36; label.append(input);
-    const status = el('p', 'form-status'); status.id = 'profile-status'; const submit = el('button', 'button primary', 'Guardar alias'); submit.type = 'submit'; form.append(el('h2', '', 'Cómo quieres que te llamen'), label, status, submit, button('Cancelar', () => d.close())); d.append(form);
-    form.addEventListener('submit', event => { event.preventDefault(); transact(form, 'profile-status', async () => { member = await rpc('fc_profile', { p_alias: input.value.trim() }); aliases.clear(); updateGate(); d.close(); await refreshList(); if (current) await openTopic(current, { quiet: true }); }); }); d.showModal();
+  bind('profile-button', 'click', openProfile);
+  bind('progression-button', 'click', () => {
+    let d = $('progression-dialog'); if (!d) { d = el('dialog', 'forum-dialog wide-dialog'); d.id = 'progression-dialog'; doc.body.append(d); }
+    const list = el('ol', 'progression-list');
+    for (const stage of PROFILE_STAGES) { const li = el('li'); li.append(el('h3', '', stage.label), el('p', '', `${stage.minDays} días · ${stage.minContributions} aportaciones${stage.minActiveDays ? ` · participación en ${stage.minActiveDays} días distintos` : ''}`), el('p', 'field-help', stage.description)); list.append(li); }
+    d.replaceChildren(el('h2', '', 'Tu trayectoria en Foro Cromos'), el('p', '', 'Desde la admisión puedes publicar, adjuntar archivos, elegir avatar y dar estilo a tus mensajes. Las etapas reconocen tiempo y participación; no conceden autoridad sobre otras personas.'), list, el('p', '', 'Desde los 90 días puedes plantear una ayudantía al equipo mediante Aviso confidencial. Las ayudantes orientan; la moderación se asigna por invitación y acuerdo. Solo los fundadores pueden cambiar estas funciones.'), button('Cerrar', () => d.close())); d.showModal();
   });
   async function poll() {
     if (destroyed || doc.hidden || busy || !session) return;
@@ -398,7 +644,7 @@ export function createForum({ client, doc = document, win = window }) {
     try {
       const r = await client.from('fc_members').select('*').eq('user_id', session.user.id).maybeSingle(); if (r.error) throw r.error;
       if (scope !== epoch) return;
-      if (r.data?.status !== member?.status || r.data?.role !== member?.role) { epoch++; clearPrivate(); member = r.data; updateGate(); }
+      if (r.data?.status !== member?.status || r.data?.role !== member?.role) { epoch++; clearPrivate(); member = r.data; updateGate(); if (admitted()) await hydrateSelf(); }
       else { member = r.data; updateGate(); }
       if (admitted()) { await refreshList({ quiet: true }); if (current) await openTopic(current, { quiet: true }); } else await refreshList();
     } catch (error) { if (scope === epoch) { if (expired(error)) expireAccess(); else say('app-status', friendlyError(error)); } } finally { busy = false; }
@@ -419,7 +665,7 @@ export function createForum({ client, doc = document, win = window }) {
   }
   const interval = win.setInterval(poll, 20000);
   client.auth.getSession().then(({ data, error }) => { if (error) say('app-status', friendlyError(error)); else if (data.session && !session) syncSession(data.session); });
-  return { refreshList, syncSession, openTopic, destroy() { destroyed = true; epoch++; win.clearInterval(interval); subscription.unsubscribe(); }, getState: () => ({ member, topics, current, preview }) };
+  return { refreshList, syncSession, openTopic, destroy() { destroyed = true; epoch++; revokeUrls(); topicComposer.destroy(); replyComposer.destroy(); win.clearInterval(interval); subscription.unsubscribe(); }, getState: () => ({ member, topics, current, preview }) };
 }
 
 if (typeof document !== 'undefined' && document.getElementById('auth-form')) {

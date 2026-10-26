@@ -11,21 +11,29 @@ const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(resolv
 const first = { id: 'one', category: 'cuidado', title: 'PRIVATE TITLE ONE', body: 'PRIVATE BODY ONE', author_id: 'a', editorial: false, pinned: false, closed: false, hidden: false, withdrawn_at: null, created_at: '2026-10-26T12:00:00Z' };
 const second = { ...first, id: 'two', title: 'Second conversation', body: 'Second body', author_id: 'b' };
 
-function harness(t, { rpc, query, auth = {}, role = 'member' } = {}) {
+function harness(t, { rpc, query, auth = {}, role = 'member', storage = {}, policy = { attachment_limit: 950000, founder: false }, profileQuery } = {}) {
   const dom = new JSDOM(html, { url: 'https://example.invalid/foro/', pretendToBeVisual: true });
   const { window } = dom, document = window.document;
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   window.HTMLDialogElement.prototype.close = function () { this.open = false; };
   window.confirm = () => true;
+  const revoked = []; let urlId = 0;
+  window.URL.createObjectURL = () => `blob:private-${++urlId}`;
+  window.URL.revokeObjectURL = url => revoked.push(url);
   const people = new Map([
     ['a', { user_id: 'a', alias: 'Alias A', status: 'active', role }],
     ['b', { user_id: 'b', alias: 'Alias B', status: 'active', role: 'member' }],
     ['pending', { user_id: 'pending', alias: 'Pending', status: 'pending', role: 'member' }],
   ]);
-  const records = { fc_members: [...people.values()], fc_topics: [first, second], fc_replies: [], fc_reports: [], fc_saved: [] };
+  const records = { fc_members: [...people.values()], fc_topics: structuredClone([first, second]), fc_replies: [], fc_reports: [], fc_saved: [], fc_files: [] };
   const calls = [];
   let actor = null;
   const client = {
+    storage: { from: bucket => ({
+      download: path => storage.download ? storage.download(bucket, path) : Promise.resolve({ data: new window.Blob(['test']), error: null }),
+      upload: (path, bytes, options) => storage.upload ? storage.upload(bucket, path, bytes, options) : Promise.resolve({ data: {}, error: null }),
+      remove: paths => storage.remove ? storage.remove(bucket, paths) : Promise.resolve({ data: [], error: null }),
+    }) },
     auth: {
       getSession: async () => ({ data: { session: null } }),
       getUser: async () => ({ data: { user: { id: actor } } }),
@@ -35,6 +43,12 @@ function harness(t, { rpc, query, auth = {}, role = 'member' } = {}) {
     },
     async rpc(name, args) {
       calls.push({ name, args, actor });
+      if (name === 'fc_upload_policy') return { data: policy, error: null };
+      if (name === 'fc_profile_cards') {
+        const override = profileQuery ? await profileQuery(args, actor) : undefined; if (override !== undefined) return override;
+        return { data: args.p_ids.map(id => people.get(id)).filter(p => p?.status === 'active').map(p => ({ created_at: first.created_at, topic_count: records.fc_topics.filter(row => row.author_id === p.user_id).length, reply_count: records.fc_replies.filter(row => row.author_id === p.user_id).length, active_days: 1, ...structuredClone(p) })), error: null };
+      }
+      if (name === 'fc_my_files') return { data: records.fc_files.filter(f => f.owner_id === actor && f.status !== 'linked'), error: null };
       if (rpc) return rpc(name, args, actor);
       return { data: { ok: true }, error: null };
     },
@@ -72,7 +86,7 @@ function harness(t, { rpc, query, auth = {}, role = 'member' } = {}) {
   const submit = selector => $(selector).dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   const login = async id => { actor = id; await forum.syncSession(id ? session(id) : null); };
   t.after(() => { forum.destroy(); window.close(); });
-  return { forum, document, window, records, people, calls, $, button, submit, login };
+  return { forum, document, window, records, people, calls, $, button, submit, login, revoked };
 }
 
 test('team trial buttons select the account and clear and focus the password without authenticating until form submission', async t => {
@@ -127,7 +141,7 @@ test('late successful publication cannot repopulate private content after logout
   await h.login('a');
   h.$('#topic-title-input').value = first.title; h.$('#topic-body-input').value = first.body;
   h.submit('#topic-form'); await flush();
-  assert.equal(h.calls[0].name, 'fc_create_topic');
+  assert.equal(h.calls.find(call => call.name === 'fc_publish')?.args.p_kind, 'topic');
   await h.login(null); late.resolve({ data: first, error: null }); await flush();
   assert.equal(h.forum.getState().member, null);
   assert.equal(h.$('#topic-view').hidden, true);
@@ -246,4 +260,112 @@ test('admission pagination reaches requests beyond the previous 250 member limit
   await h.login('a'); h.$('#moderation-button').click(); await flush();
   for (let index = 0; index < 6; index++) { h.button('Siguientes →', h.$('#moderation-list')).click(); await flush(); }
   assert.match(h.$('#moderation-list').textContent, /Candidate 299/);
+});
+
+test('Mi perfil opens a forum-specific editor and saves alias, tagline and preferred style without promoting the member', async t => {
+  let h;
+  h = harness(t, { rpc: async (name, args) => {
+    if (name === 'fc_profile_details') {
+      const card = { ...h.people.get('a'), alias: args.p_alias, tagline: args.p_tagline, font: args.p_font, color: args.p_color, avatar: null, topic_count: 1, reply_count: 0, created_at: first.created_at, active_days: 1 };
+      Object.assign(h.people.get('a'), card); return { data: card, error: null };
+    }
+    return { data: { ok: true }, error: null };
+  } });
+  await h.login('a');
+  assert.equal(h.$('#profile-button').hidden, false);
+  assert.equal(h.$('#profile-button').textContent, 'Mi perfil'); h.$('#profile-button').click(); await flush();
+  assert.match(h.$('#profile-heading').textContent, /Foro Cromos/);
+  assert.ok(h.$('#profile-avatar[type=file]'));
+  assert.match(h.$('#profile-dialog').textContent, /temas.*respuestas/);
+  h.$('#profile-alias').value = 'Luna'; h.$('#profile-tagline').value = 'Mi frase personal ✨';
+  const font = h.$('#profile-dialog select[aria-label=Fuente]'); font.value = 'serif'; font.dispatchEvent(new h.window.Event('change'));
+  const color = h.$('#profile-dialog select[aria-label=Color]'); color.value = 'teal'; color.dispatchEvent(new h.window.Event('change'));
+  h.submit('#profile-dialog form'); await flush();
+  assert.deepEqual(h.calls.find(call => call.name === 'fc_profile_details').args, { p_alias: 'Luna', p_tagline: 'Mi frase personal ✨', p_avatar: null, p_font: 'serif', p_color: 'teal' });
+  assert.equal(h.forum.getState().member.role, 'member');
+  assert.equal(h.$('#account-label').textContent, 'Luna');
+  assert.match(h.$('#my-community-card').textContent, /Mi frase personal/);
+});
+
+test('a late profile save cannot repopulate identity after an account switch', async t => {
+  const late = deferred(), h = harness(t, { rpc: async name => name === 'fc_profile_details' ? late.promise : { data: {}, error: null } });
+  await h.login('a'); h.$('#profile-button').click(); h.$('#profile-tagline').value = 'PRIVATE PROFILE PHRASE'; h.submit('#profile-dialog form'); await flush();
+  await h.login('b'); late.resolve({ data: { user_id: 'a', alias: 'PRIVATE ALIAS', tagline: 'PRIVATE PROFILE PHRASE' }, error: null }); await flush();
+  assert.equal(h.$('#profile-dialog'), null); assert.equal(h.$('#account-label').textContent, 'Alias B');
+  assert.doesNotMatch(h.document.body.textContent, /PRIVATE PROFILE|PRIVATE ALIAS/);
+});
+
+test('attachments download only on demand and late downloads cannot show media after logout', async t => {
+  const late = deferred(), downloads = [], h = harness(t, { storage: { download: (bucket, path) => { downloads.push({ bucket, path }); return late.promise; } } });
+  h.records.fc_files.push({ id: 'file', owner_id: 'a', topic_id: first.id, reply_id: null, status: 'linked', bucket_id: 'fc-attachments', object_path: 'a/file', file_name: 'photo.png', mime_type: 'image/png', byte_size: 500 });
+  await h.login('a'); await h.forum.openTopic(first);
+  assert.equal(downloads.length, 0); assert.match(h.$('#topic-body').textContent, /photo.png.*1 KB/);
+  h.button('Ver imagen', h.$('#topic-body')).click(); await flush(); assert.equal(downloads.length, 1);
+  await h.login(null); late.resolve({ data: new h.window.Blob(['image']), error: null }); await flush();
+  assert.equal(h.$('#media-dialog'), null); assert.equal(h.$('#topic-body').textContent, '');
+});
+
+test('displayed media object URLs are revoked when its topic becomes unavailable', async t => {
+  const h = harness(t);
+  h.records.fc_files.push({ id: 'file', owner_id: 'a', topic_id: first.id, reply_id: null, status: 'linked', bucket_id: 'fc-attachments', object_path: 'a/file', file_name: 'photo.png', mime_type: 'image/png', byte_size: 500 });
+  await h.login('a'); await h.forum.openTopic(first); h.button('Ver imagen', h.$('#topic-body')).click(); await flush();
+  assert.equal(h.$('#media-dialog').open, true);
+  h.records.fc_topics[0].hidden = true; await h.forum.openTopic(first, { quiet: true });
+  assert.equal(h.$('#media-dialog').open, false); assert.equal(h.$('#media-dialog img'), null); assert.ok(h.revoked.length > 0);
+});
+
+test('reply styles remain scoped to the conversation alongside its draft', async t => {
+  const h = harness(t); await h.login('a'); await h.forum.openTopic(first);
+  h.$('#reply-body').value = 'FIRST DRAFT';
+  const color = h.$('#reply-form select[aria-label=Color]'); color.value = 'violet'; color.dispatchEvent(new h.window.Event('change'));
+  await h.forum.openTopic(second); assert.equal(color.value, 'default'); await h.forum.openTopic(first);
+  assert.equal(color.value, 'violet'); assert.equal(h.$('#reply-body').value, 'FIRST DRAFT');
+});
+
+test('profile cards and their avatar URLs disappear when the server stops returning a suspended author', async t => {
+  let now = Date.now(); t.mock.method(Date, 'now', () => now);
+  const h = harness(t); h.people.get('b').avatar = {id:'avatar-b',bucket_id:'fc-avatars',object_path:'b/avatar'};
+  await h.login('a'); await h.forum.openTopic(second); await flush();
+  assert.ok(h.$('#topic-author img')); h.button('Alias B',h.$('#topic-author')).click();
+  h.people.get('b').status = 'suspended'; now += 61000; await h.forum.openTopic(second,{quiet:true}); await flush();
+  assert.equal(h.$('#topic-author img'),null); assert.equal(h.$('#member-dialog'),null); assert.ok(h.revoked.length);
+});
+
+test('readmission through polling restores founder upload capability without requiring a new login', async t => {
+  const h = harness(t,{policy:{attachment_limit:50000000,founder:true}}); await h.login('a');
+  h.people.get('a').status = 'suspended'; h.window.dispatchEvent(new h.window.Event('online')); await flush();
+  assert.equal(h.$('#profile-button').hidden,true);
+  h.people.get('a').status = 'active'; h.window.dispatchEvent(new h.window.Event('online')); await flush();
+  h.$('#new-topic-button').click();
+  assert.match(h.$('#topic-form .upload-panel').textContent,/50 MB.*fundador/);
+  assert.equal(h.calls.filter(call=>call.name==='fc_upload_policy').length,2);
+});
+
+test('a confirmed reply remains successful when the following counter refresh fails', async t => {
+  let committed = false, posts = 0;
+  const h = harness(t,{
+    rpc:async name=>{if(name==='fc_publish'){committed=true;posts++;} return{data:{id:'r'},error:null};},
+    profileQuery:()=>committed?{data:null,error:new TypeError('Failed to fetch')}:undefined,
+  });
+  await h.login('a'); await h.forum.openTopic(first); h.$('#reply-body').value='POST THAT SUCCEEDED'; h.submit('#reply-form'); await flush();
+  assert.equal(posts,1); assert.equal(h.$('#reply-body').value,'');
+  assert.match(h.$('#reply-status').textContent,/publicada/); assert.match(h.$('#app-status').textContent,/publicada/);
+});
+
+test('a late reply in another topic keeps the current topic staged attachments visible', async t => {
+  const late=deferred(); let h;
+  h=harness(t,{rpc:async(name,args)=>{
+    if(name==='fc_reserve_file'){const f={id:'file-b',owner_id:'a',purpose:'attachment',bucket_id:'fc-attachments',object_path:'a/file-b',file_name:args.p_name,mime_type:args.p_mime,byte_size:args.p_size,status:'reserved'};h.records.fc_files.push(f);return{data:f,error:null};}
+    if(name==='fc_finish_file')return{data:{...h.records.fc_files[0],status:'ready'},error:null};
+    if(name==='fc_publish'&&args.p_topic_id===first.id)return late.promise;
+    return{data:{id:'reply'},error:null};
+  }});
+  await h.login('a'); await h.forum.openTopic(second);
+  const input=h.$('#reply-form input[type=file]');Object.defineProperty(input,'files',{value:[new File(['secret'],'DRAFT-FOR-B.txt',{type:'text/plain'})],configurable:true});input.dispatchEvent(new h.window.Event('change'));await flush();
+  await h.forum.openTopic(first);h.$('#reply-body').value='ANSWER FOR A';h.submit('#reply-form');await flush();
+  await h.forum.openTopic(second);assert.match(h.$('#reply-form .staged-files').textContent,/DRAFT-FOR-B/);
+  late.resolve({data:{id:'answer-a'},error:null});await flush();
+  assert.match(h.$('#reply-form .staged-files').textContent,/DRAFT-FOR-B/);
+  h.$('#reply-body').value='ANSWER FOR B';h.submit('#reply-form');await flush();
+  assert.deepEqual(h.calls.filter(c=>c.name==='fc_publish').at(-1).args.p_files,['file-b']);
 });

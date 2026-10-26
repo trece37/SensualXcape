@@ -186,6 +186,17 @@ test('avatar validation rejects oversized or disguised non-raster inputs before 
   assert.equal(decoded, 0);
 });
 
+test('avatar normalization can explicitly accept an 8 MiB source while retaining the default and output limits', async () => {
+  const bytes = new Uint8Array(2_447_776); bytes.set([137,80,78,71,13,10,26,10]);
+  const source = new File([bytes], 'phone-photo.png', { type:'image/png' }), h = avatarEnvironment();
+  await assert.rejects(normalizeAvatar(source,{win:h.win}),/950 KB/);
+  const output = await normalizeAvatar(source,{win:h.win,maxInputBytes:8*1024*1024});
+  assert.equal(output.type,'image/webp'); assert.ok(output.size <= 950000);
+  await assert.rejects(normalizeAvatar({type:'image/png',size:8*1024*1024+1},{win:h.win,maxInputBytes:8*1024*1024}),/8 MB/);
+  h.canvas.toBlob=(done,type)=>done(new Blob([new Uint8Array(950001)],{type}));
+  await assert.rejects(normalizeAvatar(jpeg(),{win:h.win,maxInputBytes:8*1024*1024}),/límite de 950 KB/);
+});
+
 test('avatar fallback revokes only its local object URL and cleans up after a failed encoding', async () => {
   for (const failure of [false, true]) {
     const h = avatarEnvironment({ fallback: true, failure });

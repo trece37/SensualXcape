@@ -152,10 +152,11 @@ export function describeProgress(stats = {}, now = Date.now()) {
   return { stage, nextStage, days, contributions, activeDays, helperEligible: days >= PROFILE_RULES.helperMinDays, helperReviewRequired: true };
 }
 
-export async function normalizeAvatar(file, { win = globalThis.window } = {}) {
+export async function normalizeAvatar(file, { win = globalThis.window, maxInputBytes = 950000 } = {}) {
   const types = ['image/jpeg', 'image/png', 'image/webp'];
-  if (!file || !types.includes(file.type) || !Number.isFinite(file.size) || file.size < 1 || file.size > 950000) {
-    throw new Error('Elige una imagen JPEG, PNG o WebP de hasta 950 KB.');
+  const inputLimit = Number.isSafeInteger(maxInputBytes) && maxInputBytes > 0 ? Math.min(maxInputBytes,8*1024*1024) : 950000;
+  if (!file || !types.includes(file.type) || !Number.isFinite(file.size) || file.size < 1 || file.size > inputLimit) {
+    throw new Error(`Elige una imagen JPEG, PNG o WebP de hasta ${inputLimit === 8*1024*1024 ? '8 MB' : `${Math.ceil(inputLimit/1000)} KB`}.`);
   }
   let source, objectUrl, canvas;
   try {
@@ -184,6 +185,7 @@ export async function normalizeAvatar(file, { win = globalThis.window } = {}) {
     context.drawImage(source, (width - side) / 2, (height - side) / 2, side, side, 0, 0, 256, 256);
     const blob = await new Promise((resolve, reject) => canvas.toBlob(result => result ? resolve(result) : reject(new Error('No se ha podido preparar el avatar.')), 'image/webp', 0.8));
     if (blob.type !== 'image/webp') throw new Error('Este navegador no puede guardar el avatar en WebP.');
+    if (!blob.size || blob.size > 950000) throw new Error('No se ha podido preparar el avatar dentro del límite de 950 KB.');
     return new win.File([blob], 'avatar.webp', { type: 'image/webp' });
   } catch (error) {
     if (error instanceof Error && /^(Elige |Este navegador |No se ha podido )/.test(error.message)) throw error;

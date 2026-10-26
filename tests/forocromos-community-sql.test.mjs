@@ -195,6 +195,36 @@ test('avatars and profile styles validate ownership, replacement revokes old ava
  assert.equal((await as('b','select * from storage.objects where name=$1',[next.object_path])).rows.length,0);
 });
 
+test('WebP avatar and profile font/color persist in fresh reads and style-only saves retain the linked avatar',async t=>{
+ const {db,as,rpc,reserve,upload}=await fixture(t);
+ // Storage mock follows the client's normalized WebP, raw-byte upload contract:
+ // preflight contentLength is replaced by the final object metadata size.
+ const file=await reserve('a',{purpose:'avatar',name:'avatar.webp',mime:'image/webp',size:1024});
+ assert.equal(file.bucket_id,'fc-avatars');
+ const ready=await upload('a',file); assert.equal(ready.status,'ready');
+ assert.equal((await as('a','select * from storage.objects where name=$1',[file.object_path])).rows.length,1);
+ assert.equal((await as('b','select * from storage.objects where name=$1',[file.object_path])).rows.length,0,'an unlinked preview stays private');
+ const saved=await rpc('a','fc_profile_details',['Luna','Una voz propia',file.id,'mono','teal']);
+ assert.equal(saved.font,'mono'); assert.equal(saved.color,'teal'); assert.equal(saved.avatar.id,file.id);
+ const stored=(await db.query('select font,color,avatar_file_id from fc_members where user_id=$1',[ids.a])).rows[0];
+ assert.deepEqual(stored,{font:'mono',color:'teal',avatar_file_id:file.id});
+ for(const actor of ['a','b']) {
+  const fresh=(await rpc(actor,'fc_profile_cards',[pgArray([ids.a])]))[0];
+  assert.equal(fresh.font,'mono'); assert.equal(fresh.color,'teal'); assert.deepEqual(fresh.avatar,saved.avatar);
+  assert.equal((await as(actor,'select * from storage.objects where name=$1',[file.object_path])).rows.length,1);
+ }
+ await db.query("update fc_files set expires_at=now()-interval '1 second' where id=$1",[file.id]);
+ const restyled=await rpc('a','fc_profile_details',['Luna','Otra frase',file.id,'serif','rose']);
+ assert.equal(restyled.font,'serif'); assert.equal(restyled.color,'rose'); assert.equal(restyled.avatar.id,file.id,'linked avatars survive style-only saves after reservation expiry');
+ await rpc('a','fc_profile',['Luna']);
+ const fresh=(await rpc('b','fc_profile_cards',[pgArray([ids.a])]))[0];
+ assert.equal(fresh.font,'serif'); assert.equal(fresh.color,'rose'); assert.equal(fresh.avatar.id,file.id,'the compatible alias RPC does not reset profile details');
+ assert.deepEqual(await rpc('pending','fc_profile_cards',[pgArray([ids.a])]),[]);
+ await rpc('mod','fc_admit',[ids.a,'suspended']);
+ assert.deepEqual(await rpc('b','fc_profile_cards',[pgArray([ids.a])]),[]);
+ assert.equal((await as('b','select * from storage.objects where name=$1',[file.object_path])).rows.length,0);
+});
+
 test('profile counters and progression count visible contributions and distinct UTC dates only',async t=>{
  const {db,rpc,topic,reply}=await fixture(t);
  const first=await topic(),second=await topic(); const answer=await reply(first.id,'a');

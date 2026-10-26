@@ -31,7 +31,7 @@ export function createForum({ client, doc = document, win = window }) {
   let savedOnly = false, unreadOnly = false, busy = false, reportTarget = null, authBusy = false, destroyed = false, preview = true;
   let searchTimer, replyPage = 0, replyCount = 0, navigationVersion = 0;
   const drafts = new Map(), moderationPages = { members: 0, reports: 0, topics: 0, replies: 0 };
-  const cards = new Map(), cardTimes = new Map(), staged = new Map(), styleDrafts = new Map(), objectUrls = new Map(), avatarLoads = new Map(), uploadsBusy = new Set();
+  const cards = new Map(), cardTimes = new Map(), cardRequests = new Map(), staged = new Map(), styleDrafts = new Map(), objectUrls = new Map(), avatarLoads = new Map(), uploadsBusy = new Set();
   let visibleFiles = [], uploadPolicy = { attachment_limit: 950000, founder: false }, profileVersion = 0;
   let following = false, pendingNotificationTopic = notificationTopic(win.location.href);
   let pendingReplyId = (()=>{try{const id=new URL(win.location.href).searchParams.get('reply');return /^[0-9a-f-]{36}$/i.test(id||'')?id:null;}catch{return null;}})();
@@ -186,7 +186,7 @@ export function createForum({ client, doc = document, win = window }) {
   function clearPrivate() {
     topics = []; aliases.clear(); saves.clear(); current = null; topicVersion++; listVersion++;
     navigationVersion=0;
-    cards.clear(); cardTimes.clear(); staged.clear(); styleDrafts.clear(); visibleFiles = []; profileVersion++; revokeUrls();
+    cards.clear(); cardTimes.clear(); cardRequests.clear(); staged.clear(); styleDrafts.clear(); visibleFiles = []; profileVersion++; revokeUrls();
     notices.reset(); activity.reset(); following = false;
     uploadPolicy = { attachment_limit: 950000, founder: false }; uploadsBusy.clear(); topicComposer.reset(); replyComposer.reset(); topicUploads.clear(); replyUploads.clear();
     for (const id of ['topics-list', 'topic-posts', 'topic-body', 'topic-controls', 'moderation-list', 'topic-title', 'topic-author', 'topic-category', 'topic-status', 'reply-status', 'report-status']) $(id)?.replaceChildren();
@@ -256,19 +256,22 @@ export function createForum({ client, doc = document, win = window }) {
     if (!preview && (page + 1) * 20 < count) pager.append(button('Más temas →', () => { page++; refreshList(); }));
     say('list-summary', preview ? `${topics.length} temas de apertura del equipo` : `${count} temas${savedOnly ? ' guardados' : ''}`);
   }
+  function bumpCardVersion(id){const next=(cardRequests.get(id)||0)+1;cardRequests.set(id,next);return next;}
   async function loadAliases(ids,{expectedAliases=new Map()}={}) {
     const scope = epoch;
     const missing = [...new Set(ids.filter(Boolean))].filter(id => !cards.has(id) || Date.now() - (cardTimes.get(id) || 0) > 60000 || (expectedAliases.has(id)&&expectedAliases.get(id)!==cards.get(id)?.alias));
     if (!missing.length) return;
+    const requested=new Map(missing.map(id=>[id,bumpCardVersion(id)]));
     const data = await rpc('fc_profile_cards', { p_ids: missing });
     if (scope !== epoch) return;
     const returned = new Set((data || []).map(card => card.user_id));
     for (const id of missing) if (!returned.has(id)) {
+      if(cardRequests.get(id)!==requested.get(id))continue;
       const avatarId = cards.get(id)?.avatar?.id, url = objectUrls.get(avatarId);
       if (url) win.URL.revokeObjectURL(url); objectUrls.delete(avatarId); cards.delete(id); cardTimes.delete(id); aliases.delete(id);
       if ($('member-dialog')?.dataset.userId === id) { close('member-dialog'); $('member-dialog')?.remove(); }
     }
-    for (const a of data || []) { aliases.set(a.user_id, a.alias); cards.set(a.user_id, a); cardTimes.set(a.user_id, Date.now()); }
+    for (const a of data || []) { if(!requested.has(a.user_id)||cardRequests.get(a.user_id)!==requested.get(a.user_id))continue;aliases.set(a.user_id, a.alias); cards.set(a.user_id, a); cardTimes.set(a.user_id, Date.now()); }
     renderSelf();
   }
   async function refreshList({ quiet = false } = {}) {
@@ -430,29 +433,81 @@ export function createForum({ client, doc = document, win = window }) {
     if (!admitted()) return;
     let d = $('profile-dialog'); if (d?.open) return;
     if (!d) { d = el('dialog', 'forum-dialog wide-dialog'); d.id = 'profile-dialog'; doc.body.append(d); }
-    const check = capture(), version = ++profileVersion, card = cards.get(session.user.id) || member;
-    let chosenAvatar = card.avatar || null, avatarBusy = false;
-    const valid = () => { check(); if (version !== profileVersion || !d.open) throw Object.assign(new Error('profile_closed'), { code: 'FC_SESSION_CHANGED' }); };
+    const check = capture(), version = ++profileVersion, actor = session.user.id;
+    let card = null, chosenAvatar = null, avatarBusy = false, profileLoaded = false, profileLoading = false, closed = false, previewUrl = null, savedPreview = null, previewGeneration = 0;
+    const previewUrls = new Set();
+    const valid = () => { check(); if (closed || version !== profileVersion || !d.open) throw Object.assign(new Error('profile_closed'), { code: 'FC_SESSION_CHANGED' }); };
+    const revokePreviewUrl = url => { if (previewUrls.delete(url)) win.URL.revokeObjectURL(url); };
+    const revokePreview = () => { previewGeneration++; for (const url of previewUrls) revokePreviewUrl(url); previewUrl = null; savedPreview = null; };
     d.replaceChildren(); d.setAttribute('aria-labelledby', 'profile-heading');
     const form = el('form', 'dialog-form stack-form'), heading = el('h2', '', 'Mi perfil de Foro Cromos'); heading.id = 'profile-heading';
-    const subtitle = el('p', 'dialog-description', 'Tu identidad aquí es propia del foro. Tú eliges el alias, la imagen y la frase que compartes con las compañeras admitidas.');
-    const summary = el('div', 'profile-summary'); summary.append(memberLine(session.user.id, { detailed: true }));
-    const aliasLabel = el('label', '', 'Tu alias en el foro'), alias = el('input'); alias.id = 'profile-alias'; alias.value = member.alias; alias.required = true; alias.minLength = 2; alias.maxLength = 36; alias.autocomplete = 'nickname'; aliasLabel.htmlFor = alias.id;
-    const phraseLabel = el('label', '', 'Tu frase personal'), phrase = el('input'); phrase.id = 'profile-tagline'; phrase.value = card.tagline || ''; phrase.maxLength = 160; phrase.placeholder = 'Una frase tuya, si te apetece'; phraseLabel.htmlFor = phrase.id;
-    const avatarLabel = el('label', '', 'Tu avatar'), input = el('input'); input.id = 'profile-avatar'; input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp'; avatarLabel.htmlFor = input.id;
-    const image = el('div', 'profile-avatar-actions'); image.append(avatar(card));
+    const subtitle = el('p', 'dialog-description', 'Tu identidad aquí es propia del foro. Elige tu avatar y tu estilo; pulsa Guardar mi perfil para conservar los cambios.');
+    const summary = el('div', 'profile-summary');
+    const aliasLabel = el('label', '', 'Tu alias en el foro'), alias = el('input'); alias.id = 'profile-alias'; alias.required = true; alias.minLength = 2; alias.maxLength = 36; alias.autocomplete = 'nickname'; aliasLabel.htmlFor = alias.id;
+    const phraseLabel = el('label', '', 'Tu frase personal'), phrase = el('input'); phrase.id = 'profile-tagline'; phrase.maxLength = 160; phrase.placeholder = 'Una frase tuya, si te apetece'; phraseLabel.htmlFor = phrase.id;
+    const avatarLabel = el('label', '', 'Tu foto de perfil'), input = el('input'); input.id = 'profile-avatar'; input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp'; avatarLabel.htmlFor = input.id;
+    const image = el('section', 'profile-avatar-editor'), imagePreview = el('div', 'profile-avatar-preview'), imageControls = el('div', 'profile-avatar-actions');
+    imagePreview.setAttribute('aria-label', 'Vista previa de tu avatar');
+    const avatarStatus = el('p', 'form-status'); avatarStatus.id = 'profile-avatar-status'; avatarStatus.setAttribute('role', 'status'); input.setAttribute('aria-describedby', avatarStatus.id);
     const status = el('p', 'form-status'); status.id = 'profile-status'; status.setAttribute('role', 'status');
-    const previewLabel = el('label', '', 'Tu estilo de escritura preferido'), area = el('textarea'); area.id = 'profile-preview'; area.rows = 2; area.maxLength = 160; area.value = card.tagline || 'Mi voz, a mi manera. ✨'; previewLabel.htmlFor = area.id;
-    const composer = attachComposer({ doc, textarea: area, style: card });
-    const save = el('button', 'button primary', 'Guardar mi perfil'); save.type = 'submit';
-    image.append(button('Quitar avatar', () => { if (avatarBusy) return; chosenAvatar = null; image.replaceChildren(avatar({ alias: alias.value }), button('Sin imagen · puedes elegir otra arriba', () => input.click(), 'text-button')); }, 'text-button'));
-    form.append(heading, subtitle, summary, avatarLabel, input, image, el('p', 'field-help', 'JPEG, PNG o WebP · hasta 950 KB. Guardamos una copia cuadrada de 256 píxeles y retiramos los metadatos de la imagen.'), aliasLabel, alias, phraseLabel, phrase, previewLabel, composer.element, area, status, save, button('Cerrar sin guardar', () => d.close()));
+    const save = el('button', 'button primary', 'Guardar mi perfil'); save.id = 'profile-save'; save.type = 'submit';
+    const saveState = el('p', 'field-help', 'Cargando tu perfil guardado…');
+    const closeProfile = () => { finish(); d.close(); };
+    const closeButton = button('Cerrar sin guardar', closeProfile, 'button button-quiet');
+    const saveActions = el('div', 'profile-save-actions'); saveActions.append(save, closeButton, saveState);
+    const feedback = text => { status.textContent = text; saveState.textContent = text; };
+    const dirty = () => { if (profileLoaded && !avatarBusy) feedback('Hay cambios sin guardar. Pulsa Guardar mi perfil.'); };
+    const choose = button('Elegir foto', () => { if (!profileLoaded || avatarBusy || form.dataset.busy === 'true') return; input.value = ''; input.click(); });
+    choose.id = 'profile-avatar-choose'; choose.setAttribute('aria-controls', input.id);
+    const remove = button('Quitar avatar', () => {
+      if (!profileLoaded || avatarBusy || form.dataset.busy === 'true') return;
+      chosenAvatar = null; revokePreview(); renderAvatar(); updateLocks(); avatarStatus.textContent = 'Sin avatar en esta vista previa. Guarda el perfil para quitar el anterior.'; dirty();
+    }, 'text-button'); remove.id = 'profile-avatar-remove';
+    imageControls.append(choose, remove); image.append(imagePreview, imageControls, input, avatarStatus);
+    const previewLabel = el('label', '', 'Tu estilo de escritura preferido'), area = el('textarea'); area.id = 'profile-preview'; area.rows = 2; area.maxLength = 160; area.value = 'Mi voz, a mi manera. ✨'; previewLabel.htmlFor = area.id;
+    const composer = attachComposer({ doc, textarea: area, style: DEFAULT_STYLE, onStyleChange: dirty });
+    form.append(heading, subtitle, saveActions, summary, avatarLabel, image, el('p', 'field-help', 'JPEG, PNG o WebP · foto original de hasta 8 MB. Se sube una copia cuadrada WebP de 256 píxeles, sin metadatos y de hasta 950 KB.'), aliasLabel, alias, phraseLabel, phrase, previewLabel, composer.element, area, status);
+    const retry = button('Volver a cargar mi perfil', () => loadProfile(), 'text-button'); retry.hidden = true; form.append(retry);
+    function updateLocks() {
+      const locked = !profileLoaded || avatarBusy;
+      for (const node of form.querySelectorAll('button,input,textarea,select')) if (node !== closeButton && node !== retry) node.disabled = locked;
+      remove.disabled = locked || !chosenAvatar; form.setAttribute('aria-busy', String(locked));
+    }
+    function renderAvatar() {
+      const generation = ++previewGeneration;
+      imagePreview.replaceChildren();
+      choose.textContent = chosenAvatar ? 'Cambiar foto' : 'Elegir foto';
+      const paint = (url, saved) => {
+        const img = el('img'); img.src = url; img.alt = saved ? 'Tu avatar guardado' : 'Vista previa del avatar preparado, todavía sin guardar'; img.width = img.height = 96;
+        img.addEventListener('error', () => { if (!closed && generation === previewGeneration) avatarStatus.textContent = saved ? 'Tu avatar está guardado, pero no se puede mostrar la imagen. Vuelve a abrir el perfil para reintentar.' : 'No se puede mostrar la vista previa de esta foto. Puedes elegir otra antes de guardar.'; });
+        imagePreview.replaceChildren(img);
+      };
+      if (previewUrl) { paint(previewUrl, false); return; }
+      const placeholder = el('span', 'member-avatar', (alias.value || 'Mi perfil').slice(0,1).toLocaleUpperCase('es')); placeholder.setAttribute('aria-hidden','true'); imagePreview.append(placeholder);
+      if (!chosenAvatar) { avatarStatus.textContent = 'Todavía no tienes avatar. Pulsa Elegir foto.'; return; }
+      const file = chosenAvatar;
+      // The editor owns this preview. A newer global card lookup must not suppress it,
+      // and an older download must not paint over a new selection or a closed dialog.
+      const selected = () => { valid(); if (generation !== previewGeneration || chosenAvatar?.id !== file.id || previewUrl) throw Object.assign(new Error('avatar_selection_changed'), { code: 'FC_SESSION_CHANGED' }); };
+      if (savedPreview?.id === file.id && previewUrls.has(savedPreview.url)) { paint(savedPreview.url, true); if (!avatarBusy) avatarStatus.textContent = 'Este es tu avatar guardado. Puedes cambiarlo o quitarlo.'; return; }
+      avatarStatus.textContent = 'Cargando tu avatar guardado…';
+      downloadPrivate({ file, client, check: selected }).then(blob => {
+        selected(); const url = win.URL.createObjectURL(blob); previewUrls.add(url);
+        if (savedPreview) revokePreviewUrl(savedPreview.url); savedPreview = { id: file.id, url }; paint(url, true);
+        if (!avatarBusy) avatarStatus.textContent = 'Este es tu avatar guardado. Puedes cambiarlo o quitarlo.';
+      }).catch(error => {
+        if (error.code === 'FC_SESSION_CHANGED') return;
+        try { selected(); } catch { return; }
+        avatarStatus.textContent = 'Tu avatar está guardado, pero no se pudo cargar su vista previa. Vuelve a abrir el perfil para reintentar.';
+      });
+    }
     const unused = el('section', 'unused-files'), unusedStatus = el('p', 'field-help'), unusedList = el('ul', 'staged-files');
     unused.append(el('h3', '', 'Archivos sin publicar'), el('p', 'field-help', 'Aquí puedes eliminar subidas que dejaste a medias y avatares sustituidos. Cancelar una subida no recupera el cupo de reservas del día.'), unusedStatus, unusedList);
     async function loadUnused() {
+      if (!profileLoaded) return;
       try {
         const files = await rpc('fc_my_files'); valid(); unusedList.replaceChildren();
-        const candidates = (files || []).filter(file => file.id !== chosenAvatar?.id);
+        const candidates = (files || []).filter(file => file.id !== chosenAvatar?.id && file.id !== card.avatar?.id);
         unusedStatus.textContent = candidates.length ? `${candidates.length} archivos pendientes de limpieza.` : 'No tienes archivos pendientes de limpieza.';
         for (const file of candidates) {
           const row = el('li'); row.append(el('span', '', `${file.file_name} · ${fileSize(file.byte_size)}`), button('Eliminar archivo', async () => {
@@ -465,34 +520,57 @@ export function createForum({ client, doc = document, win = window }) {
       } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') unusedStatus.textContent = friendlyError(error); }
     }
     unused.prepend(button('Revisar archivos pendientes', loadUnused, 'text-button'));
-    d.append(form, notices.settingsPanel(), unused); d.addEventListener('close', () => { if (version === profileVersion) profileVersion++; composer.destroy(); }, { once: true }); d.showModal();
-    input.addEventListener('change', async () => {
-      const file = input.files[0]; input.value = ''; if (!file || avatarBusy) return;
-      avatarBusy = true; save.disabled = true; input.disabled = true; status.textContent = 'Preparando tu avatar…';
+    function finish() { if (closed) return; closed = true; if (version === profileVersion) profileVersion++; revokePreview(); composer.destroy(); }
+    d.append(form, notices.settingsPanel(), unused); d.addEventListener('close', finish, { once: true }); d.showModal();
+    async function loadProfile() {
+      if (profileLoading) return; profileLoading = true; profileLoaded = false; retry.hidden = true; updateLocks(); feedback('Cargando tu perfil guardado…');
       try {
-        const normalized = await normalizeAvatar(file, { win }); valid();
+        const cardTicket = bumpCardVersion(actor);
+        const records = await rpc('fc_profile_cards', { p_ids: [actor] }); valid();
+        const fresh = records?.find(item => item.user_id === actor);
+        if (!fresh || !Object.hasOwn(fresh, 'avatar')) throw new Error('fc_profile_unavailable');
+        card = fresh; chosenAvatar = card.avatar; alias.value = card.alias; phrase.value = card.tagline || ''; area.value = card.tagline || 'Mi voz, a mi manera. ✨'; composer.setStyle(card);
+        if (cardRequests.get(actor) === cardTicket) { aliases.set(actor, card.alias); cards.set(actor, card); cardTimes.set(actor, Date.now()); }
+        summary.replaceChildren(memberLine(actor, { detailed: true }));
+        const progress = describeProgress(card); summary.append(el('p', 'field-help', `En la comunidad desde el ${date(card.created_at)}. ${progress.nextStage ? `Siguiente etapa: ${progress.nextStage.label}.` : 'Has alcanzado la etapa veterana.'}`));
+        profileLoaded = true; renderAvatar();
+        feedback('Perfil cargado. Los cambios se conservan al pulsar Guardar mi perfil.'); loadUnused();
+      } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') { feedback('No se pudo cargar tu perfil guardado. Vuelve a cargarlo antes de guardar cambios.'); retry.hidden = false; } }
+      finally { profileLoading = false; if (!closed && version === profileVersion) updateLocks(); }
+    }
+    input.addEventListener('change', async () => {
+      const file = input.files[0]; input.value = ''; if (!file || !profileLoaded || avatarBusy || form.dataset.busy === 'true') return;
+      avatarBusy = true; updateLocks(); avatarStatus.textContent = 'Preparando y subiendo tu avatar…'; feedback('Subiendo el avatar. Guardar estará disponible cuando termine.');
+      const previous = chosenAvatar, previousUrl = previewUrl; let candidateUrl = null;
+      try {
+        const normalized = await normalizeAvatar(file, { win, maxInputBytes: 8 * 1024 * 1024 }); valid();
+        candidateUrl = win.URL.createObjectURL(normalized); previewUrls.add(candidateUrl); previewUrl = candidateUrl; renderAvatar();
         const ready = await uploadReserved({ file: normalized, purpose: 'avatar', limit: 950000, client, rpc, check: valid }); valid();
-        const previous = chosenAvatar;
-        chosenAvatar = { id: ready.id, bucket_id: ready.bucket_id, object_path: ready.object_path };
-        image.replaceChildren(avatar({ alias: alias.value, avatar: chosenAvatar }), button('Cambiar imagen', () => input.click(), 'text-button'), button('Quitar avatar', () => { chosenAvatar = null; image.replaceChildren(avatar({ alias: alias.value })); }, 'text-button'));
-        status.textContent = 'Avatar preparado. Pulsa Guardar mi perfil para usarlo.';
-        if (previous && previous.id !== card.avatar?.id) await removeReserved({ file: previous, client, rpc, check: valid });
-      } catch (error) { if (error.code !== 'FC_SESSION_CHANGED') status.textContent = friendlyError(error); }
-      finally { avatarBusy = false; if (version === profileVersion) { save.disabled = false; input.disabled = false; } }
+        chosenAvatar = ready; revokePreviewUrl(previousUrl); if (savedPreview && savedPreview.id !== ready.id) { revokePreviewUrl(savedPreview.url); savedPreview = null; } renderAvatar();
+        avatarStatus.textContent = 'Foto preparada y subida. Falta pulsar Guardar mi perfil para usarla.'; feedback('Avatar y estilo listos para guardar. Pulsa Guardar mi perfil.');
+        if (previous && previous.id !== card.avatar?.id) removeReserved({ file: previous, client, rpc, check: valid }).catch(() => {});
+        loadUnused();
+      } catch (error) {
+        revokePreviewUrl(candidateUrl);
+        if (!closed && version === profileVersion) { previewUrl = previousUrl; chosenAvatar = previous; renderAvatar(); }
+        if (error.code !== 'FC_SESSION_CHANGED') { avatarStatus.textContent = friendlyError(error); feedback(avatarStatus.textContent); }
+      } finally { avatarBusy = false; if (!closed && version === profileVersion) updateLocks(); }
     });
+    alias.addEventListener('input', dirty); phrase.addEventListener('input', dirty);
     form.addEventListener('submit', event => {
-      event.preventDefault(); if (avatarBusy) return;
+      event.preventDefault(); if (!profileLoaded || avatarBusy || closed) return;
       transact(form, 'profile-status', async () => {
         const profile = await rpc('fc_profile_details', { p_alias: alias.value.trim(), p_tagline: phrase.value.trim(), p_avatar: chosenAvatar?.id || null, p_font: composer.getStyle().font, p_color: composer.getStyle().color }); valid();
+        bumpCardVersion(profile.user_id);
         member = { ...member, alias: profile.alias }; aliases.set(profile.user_id, profile.alias); cards.set(profile.user_id, profile); cardTimes.set(profile.user_id, Date.now());
         if (card.avatar && card.avatar.id !== profile.avatar?.id) { const oldUrl = objectUrls.get(card.avatar.id); if (oldUrl) win.URL.revokeObjectURL(oldUrl); objectUrls.delete(card.avatar.id); removeReserved({ file: card.avatar, client, rpc, check }).catch(() => {}); }
         if (!$('topic-body-input').value) topicComposer.setStyle(profile); if (!$('reply-body').value) replyComposer.setStyle(profile);
-        updateGate(); renderSelf(); d.close(); say('app-status', 'Tu perfil de Foro Cromos está guardado.'); await refreshList({ quiet: true }); if (current) await openTopic(current, { quiet: true });
+        updateGate(); renderSelf(); closeProfile();
+        await refreshList({ quiet: true }); if (current) await openTopic(current, { quiet: true });
+        say('app-status', 'Tu avatar y tu estilo de Foro Cromos están guardados.');
       });
     });
-    const progress = describeProgress(card);
-    summary.append(el('p', 'field-help', `En la comunidad desde el ${date(card.created_at)}. ${progress.nextStage ? `Siguiente etapa: ${progress.nextStage.label}.` : 'Has alcanzado la etapa veterana.'}`));
-    loadUnused();
+    updateLocks(); loadProfile();
   }
   function openReport(topicId = null, replyId = null) { reportTarget = { topicId, replyId }; say('report-status', 'Tu aviso solo se muestra a moderación y en su registro. No se publica en el hilo.'); dialog('report-dialog'); }
   async function moderate(action, target) {

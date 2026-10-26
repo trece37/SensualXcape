@@ -15,7 +15,7 @@ function harness(t, { rpc, activityRpc, query, auth = {}, role = 'member', stora
   const dom = new JSDOM(html, { url: 'https://example.invalid/foro/', pretendToBeVisual: true });
   const { window } = dom, document = window.document;
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
-  window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  window.HTMLDialogElement.prototype.close = function () { if (this.open) { this.open = false; this.dispatchEvent(new window.Event('close')); } };
   window.confirm = () => true;
   const revoked = []; let urlId = 0;
   window.URL.createObjectURL = () => `blob:private-${++urlId}`;
@@ -61,7 +61,7 @@ function harness(t, { rpc, activityRpc, query, auth = {}, role = 'member', stora
       if (name === 'fc_upload_policy') return { data: policy, error: null };
       if (name === 'fc_profile_cards') {
         const override = profileQuery ? await profileQuery(args, actor) : undefined; if (override !== undefined) return override;
-        return { data: args.p_ids.map(id => people.get(id)).filter(p => p?.status === 'active').map(p => ({ created_at: first.created_at, topic_count: records.fc_topics.filter(row => row.author_id === p.user_id).length, reply_count: records.fc_replies.filter(row => row.author_id === p.user_id).length, active_days: 1, ...structuredClone(p) })), error: null };
+        return { data: args.p_ids.map(id => people.get(id)).filter(p => p?.status === 'active').map(p => ({ avatar: null, tagline: '', font: 'sans', color: 'default', created_at: first.created_at, topic_count: records.fc_topics.filter(row => row.author_id === p.user_id).length, reply_count: records.fc_replies.filter(row => row.author_id === p.user_id).length, active_days: 1, ...structuredClone(p) })), error: null };
       }
       if (name === 'fc_my_files') return { data: records.fc_files.filter(f => f.owner_id === actor && f.status !== 'linked'), error: null };
       if (name === 'fc_notifications') return {data:{items:[],unread_count:0,has_more:false,next_before:null,next_before_id:null},error:null};
@@ -309,10 +309,126 @@ test('Mi perfil opens a forum-specific editor and saves alias, tagline and prefe
 
 test('a late profile save cannot repopulate identity after an account switch', async t => {
   const late = deferred(), h = harness(t, { rpc: async name => name === 'fc_profile_details' ? late.promise : { data: {}, error: null } });
-  await h.login('a'); h.$('#profile-button').click(); h.$('#profile-tagline').value = 'PRIVATE PROFILE PHRASE'; h.submit('#profile-dialog form'); await flush();
+  await h.login('a'); h.$('#profile-button').click(); await flush(); h.$('#profile-tagline').value = 'PRIVATE PROFILE PHRASE'; h.submit('#profile-dialog form'); await flush();
+  assert.equal(h.calls.some(call => call.name === 'fc_profile_details'), true);
   await h.login('b'); late.resolve({ data: { user_id: 'a', alias: 'PRIVATE ALIAS', tagline: 'PRIVATE PROFILE PHRASE' }, error: null }); await flush();
   assert.equal(h.$('#profile-dialog'), null); assert.equal(h.$('#account-label').textContent, 'Alias B');
   assert.doesNotMatch(h.document.body.textContent, /PRIVATE PROFILE|PRIVATE ALIAS/);
+});
+
+test('opening Mi perfil while its initial card loads cannot erase a saved avatar when editing only style', async t => {
+  const pending = deferred(); let h;
+  const savedAvatar = { id: 'saved-avatar', bucket_id: 'fc-avatars', object_path: 'a/saved-avatar' };
+  const card = { user_id: 'a', alias: 'Alias A', avatar: savedAvatar, font: 'mono', color: 'violet', tagline: 'Ya guardada', status: 'active', role: 'member' };
+  h = harness(t, { profileQuery: args => args.p_ids.includes('a') ? pending.promise : undefined, rpc: async (name,args) => name === 'fc_profile_details' ? { data: { ...card, font: args.p_font, color: args.p_color }, error: null } : { data:{},error:null } });
+  h.people.get('a').avatar_file_id = savedAvatar.id;
+  const login = h.login('a'); await flush(); h.$('#profile-button').click();
+  h.submit('#profile-dialog form'); await flush();
+  assert.equal(h.calls.some(call => call.name === 'fc_profile_details'), false, 'raw membership data is not an authoritative avatar selection');
+  assert.equal(h.$('#profile-dialog button[type=submit]').disabled, true);
+  pending.resolve({ data:[card],error:null }); await login; await flush();
+  const font = h.$('#profile-dialog select[aria-label=Fuente]'); font.value = 'serif'; font.dispatchEvent(new h.window.Event('change'));
+  h.submit('#profile-dialog form'); await flush();
+  assert.equal(h.calls.find(call => call.name === 'fc_profile_details').args.p_avatar, savedAvatar.id);
+});
+
+function avatarCanvas(h, decode) {
+  const create = h.document.createElement.bind(h.document);
+  h.window.File = File;
+  h.window.createImageBitmap = decode || (async () => ({ width: 1600, height: 1200, close() {} }));
+  h.document.createElement = (...args) => {
+    const node = create(...args);
+    if (args[0] === 'canvas') { node.getContext = () => ({ drawImage() {} }); node.toBlob = (done,type) => done(new Blob(['normalized raster'],{type})); }
+    return node;
+  };
+}
+function chooseAvatar(h, size = 2_447_776) {
+  const bytes = new Uint8Array(size); bytes.set([137,80,78,71,13,10,26,10]);
+  const input = h.$('#profile-avatar'); Object.defineProperty(input,'files',{configurable:true,value:[new File([bytes],'own-art.png',{type:'image/png'})]}); input.dispatchEvent(new h.window.Event('change'));
+}
+
+test('phone-sized avatar has a visible choose action, prepared feedback and persists with preferred style in a new client', async t => {
+  const store = { card: { user_id:'a', alias:'Alias A', status:'active',role:'member',avatar:null,font:'sans',color:'default',tagline:'',created_at:first.created_at }, files:[] };
+  const make = () => {
+    let h;
+    h = harness(t,{profileQuery:args => ({data:args.p_ids.map(id=>id==='a'?structuredClone(store.card):h.people.get(id)).filter(Boolean),error:null}),rpc:async(name,args)=>{
+      if(name==='fc_reserve_file'){const file={id:`avatar-${store.files.length+1}`,owner_id:'a',purpose:'avatar',bucket_id:'fc-avatars',object_path:`a/avatar-${store.files.length+1}`,file_name:args.p_name,mime_type:args.p_mime,byte_size:args.p_size,status:'reserved'};store.files.push(file);return{data:file,error:null};}
+      if(name==='fc_finish_file'){const file=store.files.find(file=>file.id===args.p_id);file.status='ready';return{data:{...file},error:null};}
+      if(name==='fc_profile_details'){const file=store.files.find(file=>file.id===args.p_avatar);if(file)file.status='linked';store.card={...store.card,alias:args.p_alias,tagline:args.p_tagline,font:args.p_font,color:args.p_color,avatar:file?{id:file.id,bucket_id:file.bucket_id,object_path:file.object_path}:null};return{data:structuredClone(store.card),error:null};}
+      return{data:{},error:null};
+    }});
+    h.people.get('a').avatar_file_id=store.card.avatar?.id||null;return h;
+  };
+  const h=make();avatarCanvas(h);await h.login('a');h.$('#profile-button').click();await flush();
+  assert.equal(h.$('#profile-avatar-choose').textContent,'Elegir foto');let pickerOpened=0;h.$('#profile-avatar').click=()=>pickerOpened++;h.$('#profile-avatar-choose').click();assert.equal(pickerOpened,1);
+  chooseAvatar(h);await flush();assert.ok(h.$('.profile-avatar-preview > img'));assert.match(h.$('#profile-avatar-status').textContent,/Falta pulsar Guardar/);
+  assert.equal(h.calls.find(call=>call.name==='fc_reserve_file').args.p_purpose,'avatar');assert.ok(h.calls.find(call=>call.name==='fc_reserve_file').args.p_size<=950000);
+  h.$('#profile-avatar-remove').click();assert.equal(h.$('#profile-avatar-choose').textContent,'Elegir foto');assert.equal(h.$('.profile-avatar-preview > img'),null);
+  chooseAvatar(h);await flush();
+  for(const[name,value]of[['Fuente','mono'],['Color','violet']]){const select=h.$(`#profile-dialog select[aria-label=${name}]`);select.value=value;select.dispatchEvent(new h.window.Event('change'));}
+  h.submit('#profile-dialog form');await flush();assert.equal(store.card.avatar.id,'avatar-2');assert.equal(store.card.font,'mono');assert.equal(store.card.color,'violet');assert.match(h.$('#app-status').textContent,/guardados/);
+  const restored=make();await restored.login('a');restored.$('#profile-button').click();await flush();
+  assert.equal(restored.$('#profile-dialog select[aria-label=Fuente]').value,'mono');assert.equal(restored.$('#profile-dialog select[aria-label=Color]').value,'violet');assert.ok(restored.$('#profile-dialog .profile-avatar-preview img'));
+  restored.submit('#profile-dialog form');await flush();assert.equal(restored.calls.find(call=>call.name==='fc_profile_details').args.p_avatar,'avatar-2');
+});
+
+test('Mi perfil reloads server style instead of reopening a stale cached card and can retry a failed load safely', async t => {
+  let current={user_id:'a',alias:'Alias A',status:'active',role:'member',avatar:null,font:'sans',color:'default',tagline:''},unavailable=false;
+  const h=harness(t,{profileQuery:args=>args.p_ids.includes('a')?(unavailable?{data:null,error:new TypeError('Failed to fetch')}:{data:[{...current}],error:null}):undefined});
+  await h.login('a');current={...current,font:'serif',color:'teal',tagline:'Otra sesión guardada'};unavailable=true;h.$('#profile-button').click();await flush();
+  assert.equal(h.$('#profile-save').disabled,true);assert.equal(h.calls.some(call=>call.name==='fc_profile_details'),false);
+  unavailable=false;h.button('Volver a cargar mi perfil',h.$('#profile-dialog')).click();await flush();
+  assert.equal(h.$('#profile-dialog select[aria-label=Fuente]').value,'serif');assert.equal(h.$('#profile-dialog select[aria-label=Color]').value,'teal');assert.equal(h.$('#profile-tagline').value,'Otra sesión guardada');
+});
+
+test('an older card request, even an empty response, cannot evict the profile just saved', async t => {
+  for(const response of [[],[{user_id:'a',alias:'OLD',avatar:null,font:'serif',color:'rose',tagline:'OLD phrase'}]]){
+    const late=deferred();let firstRequest=true,server={user_id:'a',alias:'Alias A',status:'active',role:'member',avatar:null,font:'sans',color:'default',tagline:''};
+    const h=harness(t,{profileQuery:args=>{if(!args.p_ids.includes('a'))return undefined;if(firstRequest){firstRequest=false;return late.promise;}return{data:[{...server}],error:null};},rpc:async(name,args)=>{
+      if(name==='fc_profile_details'){server={...server,font:args.p_font,color:args.p_color,tagline:args.p_tagline};return{data:{...server},error:null};}return{data:{},error:null};
+    }});
+    const login=h.login('a');await flush();h.$('#profile-button').click();await flush();h.$('#profile-tagline').value='NEW phrase';const font=h.$('#profile-dialog select[aria-label=Fuente]');font.value='mono';font.dispatchEvent(new h.window.Event('change'));h.submit('#profile-dialog form');await flush();
+    late.resolve({data:response,error:null});await login;await flush();assert.match(h.$('#my-community-card').textContent,/NEW phrase/);assert.doesNotMatch(h.$('#my-community-card').textContent,/OLD phrase/);
+    h.$('#profile-button').click();await flush();assert.equal(h.$('#profile-dialog select[aria-label=Fuente]').value,'mono');assert.equal(h.$('#profile-tagline').value,'NEW phrase');
+  }
+});
+
+test('avatar normalization completing after closing or changing account cannot upload or recreate a preview', async t => {
+  const late=deferred(),h=harness(t);avatarCanvas(h,()=>late.promise);await h.login('a');h.$('#profile-button').click();await flush();chooseAvatar(h);await flush();
+  await h.login('b');late.resolve({width:1200,height:1600,close(){}});await flush();
+  assert.equal(h.calls.some(call=>call.name==='fc_reserve_file'),false);assert.equal(h.$('#profile-dialog'),null);assert.equal(h.$('.profile-avatar-preview'),null);
+});
+
+test('the editor renders its saved avatar while a newer global card request is still pending', async t => {
+  const requests = [deferred(),deferred(),deferred()]; let index = 0;
+  const card = {user_id:'a',alias:'Alias A',status:'active',role:'member',avatar:{id:'saved-avatar',bucket_id:'fc-avatars',object_path:'a/saved-avatar'},font:'mono',color:'teal',tagline:''};
+  const h=harness(t,{profileQuery:args=>args.p_ids.includes('a')&&index<requests.length?requests[index++].promise:undefined});
+  t.after(()=>{for(const request of requests)request.resolve({data:[card],error:null});});
+  const login=h.login('a');await flush();h.$('#profile-button').click();await flush();const topic=h.forum.openTopic(first,{quiet:true});await flush();assert.equal(index,3);
+  requests[1].resolve({data:[card],error:null});await flush();
+  assert.equal(h.$('#profile-save').disabled,false);assert.ok(h.$('.profile-avatar-preview img'),'own preview must not depend on the newer global card cache');
+  requests[2].resolve({data:[card],error:null});requests[0].resolve({data:[card],error:null});await Promise.all([login,topic]);await flush();assert.ok(h.$('.profile-avatar-preview img'));
+});
+
+test('a saved-avatar download error is visible and never clears the linked avatar when saving style', async t => {
+  const card={user_id:'a',alias:'Alias A',status:'active',role:'member',avatar:{id:'saved-avatar',bucket_id:'fc-avatars',object_path:'a/saved-avatar'},font:'mono',color:'teal',tagline:''};
+  const h=harness(t,{profileQuery:args=>args.p_ids.includes('a')?{data:[card],error:null}:undefined,storage:{download:async()=>({data:null,error:new TypeError('Failed to fetch')})},rpc:async(name,args)=>name==='fc_profile_details'?{data:{...card,font:args.p_font,color:args.p_color},error:null}:{data:{},error:null}});
+  await h.login('a');h.$('#profile-button').click();await flush();
+  assert.match(h.$('#profile-avatar-status').textContent,/guardado.*no se pudo cargar/);assert.equal(h.$('.profile-avatar-preview img'),null);assert.equal(h.$('#profile-save').disabled,false);
+  h.submit('#profile-dialog form');await flush();assert.equal(h.calls.find(call=>call.name==='fc_profile_details').args.p_avatar,'saved-avatar');assert.equal(h.calls.some(call=>call.name==='fc_remove_file'),false);
+});
+
+test('an old saved-avatar download cannot overwrite a newly prepared photo while its upload is pending', async t => {
+  const download=deferred(),upload=deferred();let h;
+  const card={user_id:'a',alias:'Alias A',status:'active',role:'member',avatar:{id:'saved-avatar',bucket_id:'fc-avatars',object_path:'a/saved-avatar'},font:'sans',color:'default',tagline:''};
+  const fresh={id:'new-avatar',owner_id:'a',purpose:'avatar',bucket_id:'fc-avatars',object_path:'a/new-avatar',file_name:'avatar.webp',mime_type:'image/webp',byte_size:17,status:'ready'};
+  h=harness(t,{profileQuery:args=>args.p_ids.includes('a')?{data:[card],error:null}:undefined,storage:{download:()=>download.promise,upload:()=>upload.promise},rpc:async name=>({data:name==='fc_reserve_file'?{...fresh,status:'reserved'}:name==='fc_finish_file'?fresh:{},error:null})});
+  avatarCanvas(h);await h.login('a');h.$('#profile-button').click();await flush();chooseAvatar(h);await flush();
+  const prepared=h.$('.profile-avatar-preview img').src;assert.equal(h.$('#profile-save').disabled,true);
+  download.resolve({data:new h.window.Blob(['saved image']),error:null});await flush();
+  assert.equal(h.$('.profile-avatar-preview img').src,prepared);assert.match(h.$('.profile-avatar-preview img').alt,/todavía sin guardar/);
+  upload.resolve({data:{},error:null});await flush();assert.equal(h.$('.profile-avatar-preview img').src,prepared);assert.match(h.$('#profile-avatar-status').textContent,/Falta pulsar Guardar/);
+  h.button('Cerrar sin guardar',h.$('#profile-dialog')).click();await flush();assert.ok(h.revoked.includes(prepared));
 });
 
 test('attachments download only on demand and late downloads cannot show media after logout', async t => {

@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, copyFile, readdir, lstat } from 'node:fs/pr
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const FORUM_FILES = Object.freeze(['index.html', 'forum.js', 'forum.css', 'sw.js', 'manifest.webmanifest', 'icon.svg', 'assets/portal.webp', 'assets/cofre.webp', 'assets/portal-unicorn.png']);
@@ -30,6 +31,9 @@ export async function buildForum({ root = rootDir, output = join(root, 'dist-pag
   await copyFile(join(root, 'assets', 'v11', 'portal-unicorn.png'), join(output, 'assets', 'portal-unicorn.png'));
   const bundle = await readFile(join(output, 'forum.js'), 'utf8');
   if (/sb_secret_|service_role|SUPABASE_SERVICE_ROLE_KEY/.test(bundle)) throw new Error('A server credential marker must never be shipped.');
+  const hash=bytes=>createHash('sha256').update(bytes).digest('hex').slice(0,12),css=await readFile(join(output,'forum.css'));
+  const html=(await readFile(join(output,'index.html'),'utf8')).replace(/\.\/forum\.js\?v=[^"\s]+/g,`./forum.js?v=forum-${hash(bundle)}`).replace(/\.\/forum\.css\?v=[^"\s]+/g,`./forum.css?v=forum-${hash(css)}`);
+  await writeFile(join(output,'index.html'),html);
   return { output, files: FORUM_FILES.length };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) console.log(JSON.stringify(await buildForum()));

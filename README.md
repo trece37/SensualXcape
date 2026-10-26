@@ -50,6 +50,10 @@ una copia separada para contactos aceptados y sin bloqueos; no hay directorio p�
 Las fotos se normalizan a WebP de hasta 950 KB y se descargan con sesión autenticada.
 El perfil y avatar del foro siguen siendo independientes.
 
+Foro Cromos incluye [actividad reciente y novedades por cuenta](docs/FORO_CROMOS_ACTIVIDAD_20261026.md):
+últimas publicaciones y participantes, temas ordenados por la última respuesta,
+recuentos, marcas de novedades y acceso directo a la respuesta elegida.
+
 El Cofre sigue siendo temporal en la pestaña; el check-in es una simulación y
 AuraLink no conecta generación de IA. La web los identifica antes de usarlos.
 No hay correo saliente configurado ni cobros. Noir, Rosa, Fucsia y el Modo fácil

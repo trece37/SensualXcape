@@ -43,7 +43,7 @@ test('the Pages build keeps root V1 byte-for-byte and places the current app onl
   assert.deepEqual(await readFile(join(output, 'v2', 'assets', 'v2', 'cofre-closed.png')), await readFile(join(root, 'assets', 'v2', 'cofre-closed.png')));
   const forum = await readFile(join(output, 'foro', 'index.html'), 'utf8');
   assert.match(forum, /connect-src 'self' https:\/\/oorheeyyahpyiarwktbq\.supabase\.co wss:\/\/oorheeyyahpyiarwktbq\.supabase\.co/u);
-  assert.match(forum, /src="\.\/forum\.js\?v=notifications-20261026"/u);
+  assert.match(forum, /src="\.\/forum\.js\?v=forum-[a-f0-9]{12}"/u);
   assert.match(forum, /worker-src 'self'/u);
   assert.match(forum, /href="\.\/manifest\.webmanifest"/u);
   assert.match(await readFile(join(output, 'foro', 'sw.js'), 'utf8'), /FC_SET_PUSH_BINDING/u);

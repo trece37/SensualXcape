@@ -11,7 +11,7 @@ const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(resolv
 const first = { id: 'one', category: 'cuidado', title: 'PRIVATE TITLE ONE', body: 'PRIVATE BODY ONE', author_id: 'a', editorial: false, pinned: false, closed: false, hidden: false, withdrawn_at: null, created_at: '2026-10-26T12:00:00Z' };
 const second = { ...first, id: 'two', title: 'Second conversation', body: 'Second body', author_id: 'b' };
 
-function harness(t, { rpc, query, auth = {}, role = 'member', storage = {}, policy = { attachment_limit: 950000, founder: false }, profileQuery, pushSupport = false } = {}) {
+function harness(t, { rpc, activityRpc, query, auth = {}, role = 'member', storage = {}, policy = { attachment_limit: 950000, founder: false }, profileQuery, pushSupport = false } = {}) {
   const dom = new JSDOM(html, { url: 'https://example.invalid/foro/', pretendToBeVisual: true });
   const { window } = dom, document = window.document;
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
@@ -50,6 +50,14 @@ function harness(t, { rpc, query, auth = {}, role = 'member', storage = {}, poli
     },
     async rpc(name, args) {
       calls.push({ name, args, actor });
+      if(activityRpc&&/^fc_(topics_page|activity_feed|recent_contributors|mark_topic_read|locate_reply)$/.test(name)){const override=await activityRpc(name,args,actor);if(override!==undefined)return override;}
+      if(name==='fc_topics_page'){
+        let q=client.from('fc_topics').select('*').eq('hidden',false);if(args.p_category)q=q.eq('category',args.p_category);if(args.p_search)q=q.ilike('title',`%${args.p_search}%`);if(args.p_saved_only)q=q.in('id',records.fc_saved.filter(s=>!s.user_id||s.user_id===actor).map(s=>s.topic_id));
+        const result=await q.range(args.p_offset,args.p_offset+args.p_limit-1);return{data:{items:result.data||[],total:result.count||0},error:result.error};
+      }
+      if(name==='fc_activity_feed'||name==='fc_recent_contributors')return{data:{items:[],has_more:false},error:null};
+      if(name==='fc_mark_topic_read')return{data:{unread_count:0,topic_unread:false},error:null};
+      if(name==='fc_locate_reply'){const rows=records.fc_replies.filter(p=>p.topic_id===args.p_topic_id&&!p.hidden);return{data:{reply_page:Math.floor(Math.max(0,rows.findIndex(p=>p.id===args.p_reply_id))/50)},error:null};}
       if (name === 'fc_upload_policy') return { data: policy, error: null };
       if (name === 'fc_profile_cards') {
         const override = profileQuery ? await profileQuery(args, actor) : undefined; if (override !== undefined) return override;
@@ -387,4 +395,24 @@ test('logout clears private content immediately even when device unregistration 
  await h.login('a');await flush();await h.forum.openTopic(first);h.$('#logout-button').click();await flush();
  assert.equal(h.forum.getState().member,null);assert.equal(h.$('#topic-view').hidden,true);assert.doesNotMatch(h.document.body.textContent,/PRIVATE BODY/);
  assert.ok(h.calls.some(call=>call.name==='fc_unregister_push'));late.resolve({data:{ok:true},error:null});await flush();
+});
+
+test('topic summaries show real activity metadata, separate unread states and send the chosen filters',async t=>{
+ const h=harness(t,{activityRpc:(name,args)=>name==='fc_topics_page'?{data:{items:[{...first,reply_count:7,last_activity_at:first.created_at,last_author_id:'b',last_reply_id:'r7',unread_count:3,topic_unread:true}],total:1},error:null}:undefined});await h.login('a');
+ const row=h.$('#topics-list .topic-row');assert.match(row.textContent,/7 respuestas/);assert.match(row.textContent,/3 respuestas nuevas/);assert.match(row.textContent,/Nuevo hilo/);assert.match(row.textContent,/Alias B/);assert.equal(row.classList.contains('topic-has-unread'),true);
+ h.$('#unread-topics-filter').click();await flush();assert.equal(h.calls.filter(c=>c.name==='fc_topics_page').at(-1).args.p_unread_only,true);h.$('#sort-select').value='newest';h.$('#sort-select').dispatchEvent(new h.window.Event('change'));await flush();assert.equal(h.calls.filter(c=>c.name==='fc_topics_page').at(-1).args.p_order,'newest');
+});
+test('opening a pending reply locates its actual page and acknowledges only the rendered reply IDs',async t=>{
+ const h=harness(t);h.records.fc_replies.push(...Array.from({length:121},(_,index)=>({id:`r-${index}`,topic_id:first.id,author_id:'b',body:`PAGE RESPONSE ${index}`,hidden:false,withdrawn_at:null,created_at:first.created_at})));await h.login('a');await h.forum.openTopic({...first,first_unread_reply_id:'r-100'},{resume:true});
+ assert.ok(h.calls.some(c=>c.name==='fc_locate_reply'&&c.args.p_reply_id==='r-100'));assert.match(h.$('#topic-posts').textContent,/PAGE RESPONSE 120/);assert.doesNotMatch(h.$('#topic-posts').textContent,/PAGE RESPONSE 49\b/);
+ const ack=h.calls.filter(c=>c.name==='fc_mark_topic_read').at(-1);assert.deepEqual(ack.args.p_reply_ids,Array.from({length:21},(_,i)=>`r-${100+i}`));assert.equal(h.document.activeElement.dataset.replyId,'r-100');assert.equal(new URL(h.window.location.href).searchParams.get('reply'),'r-100');
+});
+test('background refresh never consumes newly arriving replies as read',async t=>{
+ const h=harness(t);await h.login('a');await h.forum.openTopic(first);const before=h.calls.filter(c=>c.name==='fc_mark_topic_read').length;h.records.fc_replies.push({id:'unseen',topic_id:first.id,author_id:'b',body:'NEW DURING REFRESH',hidden:false,withdrawn_at:null,created_at:first.created_at});await h.forum.openTopic(first,{quiet:true});assert.equal(h.calls.filter(c=>c.name==='fc_mark_topic_read').length,before);
+});
+test('a late read acknowledgment cannot restore the previous account or its activity',async t=>{
+ const pending=deferred();const h=harness(t,{activityRpc:name=>name==='fc_mark_topic_read'?pending.promise:undefined});await h.login('a');const opening=h.forum.openTopic(first);await flush();await h.login(null);pending.resolve({data:{unread_count:0,topic_unread:false},error:null});await opening;assert.equal(h.forum.getState().member,null);assert.equal(h.$('#community-activity').hidden,true);assert.doesNotMatch(h.document.body.textContent,/PRIVATE BODY ONE|PRIVATE TITLE ONE/);
+});
+test('quiet refresh cannot supersede an explicit reply navigation and preserves keyboard focus afterwards',async t=>{
+ const pending=deferred();let awaiting=true;const h=harness(t,{activityRpc:name=>name==='fc_mark_topic_read'&&awaiting?pending.promise:undefined});h.records.fc_replies.push({id:'target',topic_id:first.id,author_id:'b',body:'TARGET RESPONSE',hidden:false,withdrawn_at:null,created_at:first.created_at});await h.login('a');const opening=h.forum.openTopic(first,{replyId:'target'});await flush();const count=h.calls.filter(c=>c.name==='fc_topics_page').length;await h.forum.openTopic(first,{quiet:true});assert.equal(h.document.activeElement.dataset.replyId,'target');pending.resolve({data:{unread_count:0},error:null});awaiting=false;await opening;assert.ok(h.calls.filter(c=>c.name==='fc_topics_page').length>count);await h.forum.openTopic(first,{quiet:true});assert.equal(h.document.activeElement.dataset.replyId,'target');
 });

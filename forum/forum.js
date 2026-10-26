@@ -4,6 +4,7 @@ import { CATEGORIES, SEED_TOPICS, PRINCIPLES } from './content.js';
 import { DEFAULT_STYLE, normalizeStyle, renderBody as styledBody, attachComposer, PROFILE_STAGES, describeProgress, normalizeAvatar } from './community.js';
 import { FILE_ACCEPT, fileSize, uploadReserved, removeReserved, downloadPrivate } from './files.js';
 import { createNotifications, notificationTopic } from './notifications.js';
+import { createActivity, activityTime } from './activity.js';
 
 export function friendlyError(error) {
   const text = String(error?.message || error || '');
@@ -27,12 +28,13 @@ export function createForum({ client, doc = document, win = window }) {
   const $ = id => doc.getElementById(id);
   let session = null, member = null, topics = [], aliases = new Map(), saves = new Set();
   let category = '', page = 0, count = 0, current = null, epoch = 0, listVersion = 0, topicVersion = 0;
-  let savedOnly = false, busy = false, reportTarget = null, authBusy = false, destroyed = false, preview = true;
-  let searchTimer, replyPage = 0, replyCount = 0;
+  let savedOnly = false, unreadOnly = false, busy = false, reportTarget = null, authBusy = false, destroyed = false, preview = true;
+  let searchTimer, replyPage = 0, replyCount = 0, navigationVersion = 0;
   const drafts = new Map(), moderationPages = { members: 0, reports: 0, topics: 0, replies: 0 };
   const cards = new Map(), cardTimes = new Map(), staged = new Map(), styleDrafts = new Map(), objectUrls = new Map(), avatarLoads = new Map(), uploadsBusy = new Set();
   let visibleFiles = [], uploadPolicy = { attachment_limit: 950000, founder: false }, profileVersion = 0;
   let following = false, pendingNotificationTopic = notificationTopic(win.location.href);
+  let pendingReplyId = (()=>{try{const id=new URL(win.location.href).searchParams.get('reply');return /^[0-9a-f-]{36}$/i.test(id||'')?id:null;}catch{return null;}})();
   const el = (tag, cls, text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
   const show = (id, yes) => { if ($(id)) $(id).hidden = !yes; };
   const say = (id, text) => { if ($(id)) { $(id).textContent = text; if (id === 'app-status') $(id).hidden = !text; } };
@@ -54,6 +56,8 @@ export function createForum({ client, doc = document, win = window }) {
   const topicUploads = uploadPanel(() => 'new-topic'), replyUploads = uploadPanel(() => current?.id);
   $('topic-body-input').after(topicUploads.element); $('reply-body').after(replyUploads.element);
   const notices = createNotifications({ doc, win, client, rpc, capture, isActive: admitted, onOpenTopic: id => openTopic({ id }), errorText: friendlyError });
+  const activity = createActivity({doc,win,rpc,capture,isActive:admitted,loadAliases,memberLine,memberSignature:ids=>JSON.stringify(ids.map(id=>cards.get(id)||null)),onOpen:item=>openTopic({id:item.topic_id},{replyId:item.reply_id}),errorText:friendlyError});
+  $('activity-mount')?.append(activity.element);
 
   function revokeUrls() {
     for (const value of objectUrls.values()) win.URL.revokeObjectURL(value);
@@ -181,17 +185,19 @@ export function createForum({ client, doc = document, win = window }) {
   }
   function clearPrivate() {
     topics = []; aliases.clear(); saves.clear(); current = null; topicVersion++; listVersion++;
+    navigationVersion=0;
     cards.clear(); cardTimes.clear(); staged.clear(); styleDrafts.clear(); visibleFiles = []; profileVersion++; revokeUrls();
-    notices.reset(); following = false;
+    notices.reset(); activity.reset(); following = false;
     uploadPolicy = { attachment_limit: 950000, founder: false }; uploadsBusy.clear(); topicComposer.reset(); replyComposer.reset(); topicUploads.clear(); replyUploads.clear();
     for (const id of ['topics-list', 'topic-posts', 'topic-body', 'topic-controls', 'moderation-list', 'topic-title', 'topic-author', 'topic-category', 'topic-status', 'reply-status', 'report-status']) $(id)?.replaceChildren();
     for (const id of ['topic-title-input', 'topic-body-input', 'reply-body', 'report-body', 'auth-password']) if ($(id)) $(id).value = '';
     for (const id of ['topic-dialog', 'report-dialog']) close(id);
     for (const id of ['edit-dialog', 'profile-dialog', 'recovery-dialog', 'member-dialog', 'media-dialog']) { close(id); $(id)?.remove(); }
     $('my-community-card')?.replaceChildren(); show('my-community-card', false);
-    reportTarget = null; savedOnly = false; page = 0;
+    reportTarget = null; savedOnly = false; unreadOnly=false; page = 0;
     drafts.clear(); replyPage = 0; replyCount = 0;
     $('saved-toggle')?.setAttribute('aria-pressed', 'false');
+    $('all-topics-filter')?.setAttribute('aria-pressed','true');$('unread-topics-filter')?.setAttribute('aria-pressed','false');
     show('moderation-panel', false); show('topic-view', false); show('list-view', true);
   }
   function updateGate() {
@@ -205,6 +211,7 @@ export function createForum({ client, doc = document, win = window }) {
     show('profile-button', active); show('saved-toggle', active); show('report-open', active);
     show('notifications-button', active);
     show('my-community-card', active); show('progression-button', active);
+    show('activity-filters',active);if(!active)activity.element.hidden=true;
     if (member?.status === 'pending') say('join-message', 'Tu solicitud está pendiente de admisión. Puedes consultar aquí su estado.');
     else if (member?.status === 'suspended') say('join-message', 'Tu acceso a la comunidad está suspendido. Las conversaciones privadas no están disponibles.');
     else if (!session) say('join-message', 'Entra o crea tu cuenta para solicitar acceso. Los títulos de apertura son del equipo; las conversaciones requieren admisión.');
@@ -226,13 +233,17 @@ export function createForum({ client, doc = document, win = window }) {
       const row = el('article', 'topic-row');
       const sigil = el('span', 'topic-sigil', topic.pinned ? '✦' : '◇'); sigil.setAttribute('aria-hidden', 'true');
       const main = el('div', 'topic-main'), meta = el('div', 'topic-meta');
+      const unread=Number(topic.unread_count)||0;if(unread||topic.topic_unread)row.classList.add('topic-has-unread');
       meta.append(el('span', 'category-tag', catLabel(topic.category)));
       if (topic.pinned) meta.append(el('span', 'topic-badge', 'Fijado'));
       if (topic.closed) meta.append(el('span', 'topic-badge', 'Cerrado'));
+      if(topic.topic_unread)meta.append(el('span','topic-unread-badge','Nuevo hilo'));
+      if(unread)meta.append(el('span','topic-unread-badge',`${unread} ${unread===1?'respuesta nueva':'respuestas nuevas'}`));
       main.append(meta);
-      const heading = el('h3'); heading.append(button(topic.title, () => openTopic(topic), 'topic-title-button')); main.append(heading);
+      const heading = el('h3'); heading.append(button(topic.title, () => openTopic(topic,{resume:true}), 'topic-title-button')); main.append(heading);
       main.append(el('p', 'topic-excerpt', topic.body.slice(0, 160).split('\n')[0]));
       const foot = el('div', 'topic-meta'); foot.append(el('span', '', topic.editorial ? 'Apertura del equipo' : author(topic.author_id))); if (topic.created_at) foot.append(el('span', '', date(topic.created_at))); main.append(foot);
+      if(admitted()&&topic.last_activity_at){const meta=el('div','topic-activity'),count=Number(topic.reply_count??topic.replies_count)||0,label=activityTime(topic.last_activity_at);meta.append(el('span','topic-reply-count',`${count} ${count===1?'respuesta':'respuestas'}`));const latest=button(`Última: ${topic.last_author_id?author(topic.last_author_id):'Equipo'} · ${label.text}`,()=>openTopic(topic,{replyId:topic.last_reply_id}),'topic-last-post');latest.title=label.absolute;meta.append(latest);main.append(meta);}
       row.append(sigil, main);
       if (admitted()) row.append(button(saves.has(topic.id) ? 'Guardado' : 'Guardar', () => toggleSave(topic.id), 'save-button'));
       else row.append(el('span', 'topic-arrow', '↗'));
@@ -245,9 +256,9 @@ export function createForum({ client, doc = document, win = window }) {
     if (!preview && (page + 1) * 20 < count) pager.append(button('Más temas →', () => { page++; refreshList(); }));
     say('list-summary', preview ? `${topics.length} temas de apertura del equipo` : `${count} temas${savedOnly ? ' guardados' : ''}`);
   }
-  async function loadAliases(ids) {
+  async function loadAliases(ids,{expectedAliases=new Map()}={}) {
     const scope = epoch;
-    const missing = [...new Set(ids.filter(Boolean))].filter(id => !cards.has(id) || Date.now() - (cardTimes.get(id) || 0) > 60000);
+    const missing = [...new Set(ids.filter(Boolean))].filter(id => !cards.has(id) || Date.now() - (cardTimes.get(id) || 0) > 60000 || (expectedAliases.has(id)&&expectedAliases.get(id)!==cards.get(id)?.alias));
     if (!missing.length) return;
     const data = await rpc('fc_profile_cards', { p_ids: missing });
     if (scope !== epoch) return;
@@ -274,21 +285,13 @@ export function createForum({ client, doc = document, win = window }) {
       const savedResult = await client.from('fc_saved').select('topic_id');
       if (savedResult.error) throw savedResult.error;
       const nextSaves = new Set((savedResult.data || []).map(s => s.topic_id));
-      let query = client.from('fc_topics').select('*', { count: 'exact' }).eq('hidden', false);
-      if (category) query = query.eq('category', category);
-      if (search) query = query.ilike('title', `%${search.replace(/[\\%_]/g, '\\$&')}%`);
-      if (savedOnly) {
-        if (!nextSaves.size) { if (scope === epoch && version === listVersion) { saves = nextSaves; topics = []; count = 0; renderTopics(); say('app-status', ''); } return; }
-        query = query.in('id', [...nextSaves]);
-      }
-      if ($('sort-select')?.value === 'pinned') query = query.order('pinned', { ascending: false });
-      const result = await query.order('created_at', { ascending: false }).order('id', { ascending: false }).range(page * 20, page * 20 + 19);
-      if (result.error) throw result.error;
+      const order=$('sort-select')?.value,result=await rpc('fc_topics_page',{p_category:category||null,p_search:search||null,p_saved_only:savedOnly,p_unread_only:unreadOnly,p_order:order==='pinned'?'pinned':order==='newest'?'newest':'activity',p_limit:20,p_offset:page*20});
+      if(!Array.isArray(result?.items))throw new Error('fc_invalid_activity_response');
       if (scope !== epoch || version !== listVersion) return;
-      await loadAliases((result.data || []).map(t => t.author_id));
+      await loadAliases(result.items.flatMap(t=>[t.author_id,t.last_author_id]));
       if (scope !== epoch || version !== listVersion) return;
-      saves = nextSaves; topics = result.data || []; count = result.count || 0;
-      renderTopics(); say('app-status', win.navigator.onLine === false ? 'Sin conexión.' : 'Conversaciones actualizadas.');
+      saves = nextSaves; topics = result.items; count = result.total || 0;
+      renderTopics(); say('app-status', win.navigator.onLine === false ? 'Sin conexión.' : 'Conversaciones actualizadas.');if(!current)await activity.sync();
     } catch (error) { if (scope === epoch && version === listVersion) { if (expired(error)) expireAccess(); else say('app-status', friendlyError(error)); } }
   }
   function renderBody(container, text, style) {
@@ -302,15 +305,15 @@ export function createForum({ client, doc = document, win = window }) {
       replyComposer.setStyle(styleDrafts.get(topic.id) || cards.get(session?.user.id) || DEFAULT_STYLE);
       say('reply-status', '');
     }
-    current = topic; show('list-view', false); show('topic-view', true);
+    current = topic; show('list-view', false); show('topic-view', true);activity.element.hidden=true;
     say('topic-category', catLabel(topic.category)); say('topic-title', topic.title);
-    $('topic-author').replaceChildren(topic.editorial ? el('span', '', 'Equipo Foro Cromos') : memberLine(topic.author_id, { detailed: true }), el('span', '', date(topic.created_at)));
+    $('topic-author').replaceChildren(topic.editorial ? el('span', '', 'Equipo Foro Cromos') : memberLine(topic.author_id, { detailed: true }), el('span', '', activityTime(topic.created_at).absolute||date(topic.created_at)));
     renderBody($('topic-body'), topic.body, topic.style);
     renderFiles($('topic-body'), visibleFiles.filter(f => f.topic_id === topic.id && !f.reply_id));
     const postList = $('topic-posts'); postList.replaceChildren();
     for (const post of posts) {
-      const card = el('article', 'post'), header = el('div', 'post-header');
-      header.append(memberLine(post.author_id, { detailed: true }), el('span', '', date(post.created_at))); card.append(header);
+      const card = el('article', 'post'), header = el('div', 'post-header');card.dataset.replyId=post.id;
+      header.append(memberLine(post.author_id, { detailed: true }), el('span', '', activityTime(post.created_at).absolute)); card.append(header);
       const body = el('div', 'post-body'); renderBody(body, post.body, post.style); renderFiles(body, visibleFiles.filter(f => f.reply_id === post.id)); card.append(body);
       const actions = el('div', 'post-actions');
       if (post.author_id === session?.user.id && !post.withdrawn_at) {
@@ -324,9 +327,9 @@ export function createForum({ client, doc = document, win = window }) {
     if (!posts.length) postList.append(el('p', 'empty-state', preview ? 'Las respuestas de las compañeras se muestran después de entrar y ser admitida.' : 'Esta conversación está esperando su primera respuesta.'));
     if (!preview && replyCount > 50) {
       const pages = el('div', 'forum-pagination');
-      if (replyPage > 0) pages.append(button('← Respuestas anteriores', () => { replyPage--; openTopic(topic, { quiet: true }); }));
+      if (replyPage > 0) pages.append(button('← Respuestas anteriores', () => { replyPage--; openTopic(topic); }));
       pages.append(el('span', '', `Página ${replyPage + 1} de ${Math.ceil(replyCount / 50)}`));
-      if ((replyPage + 1) * 50 < replyCount) pages.append(button('Respuestas siguientes →', () => { replyPage++; openTopic(topic, { quiet: true }); }));
+      if ((replyPage + 1) * 50 < replyCount) pages.append(button('Respuestas siguientes →', () => { replyPage++; openTopic(topic); }));
       postList.append(pages);
     }
     const controls = $('topic-controls'); controls.replaceChildren();
@@ -353,7 +356,8 @@ export function createForum({ client, doc = document, win = window }) {
     replyUploads.render();
     say('topic-status', topic.closed ? 'Hilo cerrado. Puedes leerlo y avisar a moderación.' : preview ? 'Apertura editorial. El contenido de la comunidad requiere acceso.' : 'Responde a tu ritmo. Tu alias será visible para la comunidad admitida.');
   }
-  async function openTopic(topic, { quiet = false } = {}) {
+  async function openTopic(topic, { quiet = false, replyId = null, resume = false } = {}) {
+    if(quiet&&navigationVersion)return;
     if (preview) {
       const editorial = SEED_TOPICS.find(t => `opening-${t.slug}` === topic.id);
       if (!editorial) return;
@@ -361,7 +365,10 @@ export function createForum({ client, doc = document, win = window }) {
     }
     if (current?.id !== topic.id) replyPage = 0;
     const version = ++topicVersion, scope = epoch;
+    if(!quiet)navigationVersion=version;
     try {
+      const targetReply=replyId||(resume?topic.first_unread_reply_id:null);
+      if(targetReply){const location=await rpc('fc_locate_reply',{p_topic_id:topic.id,p_reply_id:targetReply});if(scope!==epoch||version!==topicVersion)return;replyPage=Number(location?.reply_page)||0;}
       const [head, posts] = await Promise.all([
         client.from('fc_topics').select('*').eq('id', topic.id).eq('hidden', false).maybeSingle(),
         client.from('fc_replies').select('*', { count: 'exact' }).eq('topic_id', topic.id).eq('hidden', false).order('created_at').order('id').range(replyPage * 50, replyPage * 50 + 49)
@@ -387,9 +394,18 @@ export function createForum({ client, doc = document, win = window }) {
       if (scope !== epoch || version !== topicVersion) return;
       for (const [key, url] of objectUrls) if (!key.startsWith('download-') && !allowedIds.has(key)) { win.URL.revokeObjectURL(url); objectUrls.delete(key); if (key.startsWith('media-')) { close('media-dialog'); $('media-dialog')?.replaceChildren(); } }
       visibleFiles = nextFiles; following = nextFollowing;
+      const focusedReply=quiet?doc.activeElement?.closest?.('[data-reply-id]')?.dataset.replyId:null;
       replyCount = posts.count || 0; renderTopic(head.data, posts.data || []);
-      if (!quiet) $('topic-title')?.focus();
+      if(quiet&&focusedReply&&!doc.querySelector('dialog[open]')){const focused=[...$('topic-posts').querySelectorAll('[data-reply-id]')].find(n=>n.dataset.replyId===focusedReply);if(focused){focused.tabIndex=-1;focused.focus({preventScroll:true});}}
+      if (!quiet) {
+        const target=targetReply?[...$('topic-posts').querySelectorAll('[data-reply-id]')].find(n=>n.dataset.replyId===targetReply):null;
+        if(target){target.tabIndex=-1;target.focus();}else $('topic-title')?.focus();
+        const href=new URL(win.location.href);href.searchParams.set('topic',topic.id);if(targetReply)href.searchParams.set('reply',targetReply);else href.searchParams.delete('reply');win.history.replaceState(win.history.state,'',href.href);
+        await rpc('fc_mark_topic_read',{p_topic_id:topic.id,p_reply_ids:(posts.data||[]).filter(p=>!p.withdrawn_at&&!p.hidden).map(p=>p.id),p_topic_seen:!head.data.withdrawn_at});
+        if(scope!==epoch||version!==topicVersion)return;await refreshList({quiet:true});
+      }
     } catch (error) { if (scope === epoch && version === topicVersion) { if (expired(error)) expireAccess(); else say('app-status', friendlyError(error)); } }
+    finally{if(navigationVersion===version)navigationVersion=0;}
   }
   async function toggleSave(id) {
     try { const result = await rpc('fc_toggle_save', { p_topic_id: id }); result.saved ? saves.add(id) : saves.delete(id); renderTopics(); if (current?.id === id) await openTopic(current, { quiet: true }); }
@@ -570,7 +586,7 @@ export function createForum({ client, doc = document, win = window }) {
         await hydrateSelf(); if (scope !== epoch) return;
       }
       if (changed || !admitted()) await refreshList(); else await refreshList({ quiet: true });
-      if (admitted() && pendingNotificationTopic) { const id = pendingNotificationTopic; pendingNotificationTopic = null; await openTopic({ id }); }
+      if (admitted() && pendingNotificationTopic) { const id = pendingNotificationTopic,replyId=pendingReplyId; pendingNotificationTopic = pendingReplyId=null; await openTopic({ id },{replyId}); }
     } catch (error) { if (scope === epoch) { clearPrivate(); updateGate(); await refreshList(); say('join-message', friendlyError(error)); } }
   }
   async function hydrateSelf() {
@@ -623,6 +639,8 @@ export function createForum({ client, doc = document, win = window }) {
   bind('join-form', 'submit', e => { e.preventDefault(); transact(e.currentTarget, 'join-message', async () => { await rpc('fc_join', { p_alias: $('join-alias').value.trim() }); await syncSession(session); }); });
   bind('search-input', 'input', () => { win.clearTimeout(searchTimer); searchTimer = win.setTimeout(() => { page = 0; refreshList(); }, 260); });
   bind('sort-select', 'change', () => { page = 0; refreshList(); });
+  bind('all-topics-filter','click',()=>{unreadOnly=false;page=0;$('all-topics-filter').setAttribute('aria-pressed','true');$('unread-topics-filter').setAttribute('aria-pressed','false');refreshList();});
+  bind('unread-topics-filter','click',()=>{unreadOnly=true;page=0;$('all-topics-filter').setAttribute('aria-pressed','false');$('unread-topics-filter').setAttribute('aria-pressed','true');refreshList();});
   bind('saved-toggle', 'click', () => { savedOnly = !savedOnly; $('saved-toggle').setAttribute('aria-pressed', String(savedOnly)); page = 0; refreshList(); });
   bind('new-topic-button', 'click', () => { if (admitted()) { say('topic-form-status', ''); if (!$('topic-body-input').value) topicComposer.setStyle(cards.get(session.user.id)); topicUploads.render(); dialog('topic-dialog'); } });
   bind('topic-form', 'submit', e => { e.preventDefault(); transact(e.currentTarget, 'topic-form-status', async () => {
@@ -639,7 +657,7 @@ export function createForum({ client, doc = document, win = window }) {
     else say('app-status', `Tu respuesta está publicada en «${topic.title}».`);
     try { await loadAliases([session.user.id]); } catch (error) { if (error.code === 'FC_SESSION_CHANGED') throw error; say('app-status', 'Tu respuesta está publicada. No se pudo actualizar el contador; se intentará de nuevo.'); }
   }); });
-  bind('back-topics', 'click', () => { if (current && admitted()) { drafts.set(current.id, $('reply-body').value); styleDrafts.set(current.id, replyComposer.getStyle()); } $('reply-body').value = ''; current = null; topicVersion++; show('topic-view', false); show('list-view', true); close('media-dialog'); $('media-dialog')?.replaceChildren(); refreshList(); });
+  bind('back-topics', 'click', () => { if (current && admitted()) { drafts.set(current.id, $('reply-body').value); styleDrafts.set(current.id, replyComposer.getStyle()); } $('reply-body').value = ''; current = null; topicVersion++; show('topic-view', false); show('list-view', true); close('media-dialog'); $('media-dialog')?.replaceChildren();const href=new URL(win.location.href);href.searchParams.delete('topic');href.searchParams.delete('reply');win.history.replaceState(win.history.state,'',href.href);refreshList(); });
   bind('report-open', 'click', () => openReport());
   bind('report-form', 'submit', e => { e.preventDefault(); transact(e.currentTarget, 'report-status', async () => { await rpc('fc_report', { p_topic_id: reportTarget?.topicId || null, p_reply_id: reportTarget?.replyId || null, p_body: $('report-body').value.trim() }); $('report-body').value = ''; say('report-status', 'Aviso guardado para moderación. No se ha publicado en el foro.'); }); });
   bind('open-manifesto', 'click', () => dialog('manifesto-dialog'));
@@ -665,7 +683,7 @@ export function createForum({ client, doc = document, win = window }) {
       if (admitted()) {
         await refreshList({ quiet: true }); if (current) await openTopic(current, { quiet: true });
         await notices.sync();
-        if (pendingNotificationTopic) { const id = pendingNotificationTopic; pendingNotificationTopic = null; await openTopic({ id }); }
+        if (pendingNotificationTopic) { const id = pendingNotificationTopic,replyId=pendingReplyId; pendingNotificationTopic = pendingReplyId=null; await openTopic({ id },{replyId}); }
       } else await refreshList();
     } catch (error) { if (scope === epoch) { if (expired(error)) expireAccess(); else say('app-status', friendlyError(error)); } } finally { busy = false; }
   }
@@ -685,7 +703,7 @@ export function createForum({ client, doc = document, win = window }) {
   }
   const interval = win.setInterval(poll, 20000);
   client.auth.getSession().then(({ data, error }) => { if (error) say('app-status', friendlyError(error)); else if (data.session && !session) syncSession(data.session); });
-  return { refreshList, syncSession, openTopic, destroy() { destroyed = true; epoch++; revokeUrls(); notices.destroy(); topicComposer.destroy(); replyComposer.destroy(); win.clearInterval(interval); subscription.unsubscribe(); }, getState: () => ({ member, topics, current, preview }) };
+  return { refreshList, syncSession, openTopic, destroy() { destroyed = true; epoch++; revokeUrls(); notices.destroy(); activity.destroy(); topicComposer.destroy(); replyComposer.destroy(); win.clearInterval(interval); subscription.unsubscribe(); }, getState: () => ({ member, topics, current, preview }) };
 }
 
 if (typeof document !== 'undefined' && document.getElementById('auth-form')) {

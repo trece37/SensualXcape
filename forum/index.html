@@ -57,6 +57,8 @@
 
     <p id="app-status" class="status-banner" role="status" aria-live="polite" hidden></p>
 
+    <div id="activity-mount"></div>
+
     <section id="join-panel" class="join-panel surface" aria-labelledby="join-heading">
       <div class="join-intro">
         <p class="eyebrow">La puerta de entrada</p>
@@ -114,7 +116,12 @@
           </div>
           <div class="forum-toolbar">
             <label class="search-field" for="search-input"><span aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Buscar una conversación" autocomplete="off" maxlength="160"><span class="sr-only">Buscar temas</span></label>
-            <div class="sort-field"><label for="sort-select">Ordenar</label><select id="sort-select"><option value="recent">Más recientes</option><option value="pinned">Destacados primero</option></select></div>
+            <div class="sort-field"><label for="sort-select">Ordenar</label><select id="sort-select"><option value="recent">Última actividad</option><option value="newest">Nuevos temas</option><option value="pinned">Destacados primero</option></select></div>
+          </div>
+          <div id="activity-filters" class="activity-filters" hidden>
+            <button id="all-topics-filter" class="activity-filter" type="button" aria-pressed="true">Todas las conversaciones</button>
+            <button id="unread-topics-filter" class="activity-filter" type="button" aria-pressed="false"><span aria-hidden="true">◇</span> Novedades por ver</button>
+            <p>Tu cuenta recuerda las páginas que has abierto.</p>
           </div>
           <div class="list-caption"><span>Conversaciones</span><span>Un lugar para tu experiencia</span></div>
           <div id="topics-list" class="topics-list" aria-live="polite"></div>

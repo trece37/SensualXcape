@@ -17,7 +17,7 @@ export function createNotifications({ doc, win, client, rpc, capture, isActive, 
   const supported = () => !!(win.navigator.serviceWorker && win.PushManager && win.Notification && win.MessageChannel);
   const base = () => new URL('./', win.location.href);
   function badge() {
-    bell.hidden = !isActive(); bell.replaceChildren(el('span', '', '♧'));
+    bell.hidden = !isActive(); bell.replaceChildren(el('span', '', '🔔'));
     const count = el('span', 'notification-count', unread > 99 ? '99+' : String(unread)); count.hidden = !unread; bell.append(count);
     bell.setAttribute('aria-label', `Mis avisos${unread ? `, ${unread} sin leer` : ''}`);
   }
@@ -121,11 +121,14 @@ export function createNotifications({ doc, win, client, rpc, capture, isActive, 
     const current = subscription ? await rpc('fc_push_status', { p_endpoint: subscription.endpoint }) : { registered: false }; check();
     const enable = button(current.registered ? 'Reactivar avisos del dispositivo' : 'Activar avisos en este dispositivo', async () => {
       enable.disabled = true; let created;
+      const activePanel = () => { check(); const dialog = section.closest('dialog'); if (!section.isConnected || (dialog && !dialog.open)) throw Object.assign(new Error('panel_closed'), { code: 'FC_SESSION_CHANGED' }); };
       try {
-        const permission = await win.Notification.requestPermission(); check();
+        status.textContent = 'El navegador solicita permiso. Elige «Permitir» en su aviso para continuar.';
+        let permissionTimer;
+        const permission = await Promise.race([win.Notification.requestPermission(), new Promise((_, reject) => { permissionTimer = win.setTimeout(() => reject(new Error('No se ha podido confirmar el permiso. Responde al aviso del navegador y vuelve a intentarlo.')), 30000); })]).finally(() => win.clearTimeout(permissionTimer)); activePanel();
         if (permission !== 'granted') { status.textContent = 'No has permitido los avisos. La campana del foro sigue disponible.'; return; }
         const registered = await win.navigator.serviceWorker.register(new URL('sw.js', base()).href, { scope: base().pathname });
-        const active = registered.active ? registered : await Promise.race([win.navigator.serviceWorker.ready, new Promise((_, reject) => win.setTimeout(() => reject(new Error('No se pudo preparar este dispositivo. Inténtalo de nuevo.')), 10000))]); check();
+        const active = registered.active ? registered : await Promise.race([win.navigator.serviceWorker.ready, new Promise((_, reject) => win.setTimeout(() => reject(new Error('No se pudo preparar este dispositivo. Inténtalo de nuevo.')), 10000))]); activePanel();
         let sub = await active.pushManager.getSubscription(); check();
         if (sub) { const owned = await rpc('fc_push_status', { p_endpoint: sub.endpoint }); check(); if (!owned.registered) { await sub.unsubscribe(); sub = null; } }
         if (!sub) { sub = await active.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodePublicKey(config.public_key, win) }); created = sub; } check();

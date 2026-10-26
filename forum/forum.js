@@ -108,7 +108,7 @@ export function createForum({ client, doc = document, win = window }) {
   }
   function memberLine(id, { detailed = false } = {}) {
     const card = cards.get(id), line = el('div', detailed ? 'member-line detailed' : 'member-line');
-    if (!card) { line.append(el('strong', '', author(id))); return line; }
+    if (!card) { line.append(el('strong', '', id === session?.user.id ? member?.alias || author(id) : author(id))); return line; }
     const progress = describeProgress(card), info = el('div', 'member-info');
     info.append(button(card.alias, () => showMemberCard(card), 'member-name'));
     const badges = el('div', 'member-badges'); badges.append(el('span', 'member-level', progress.stage.label));

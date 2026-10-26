@@ -4,9 +4,10 @@ import { JSDOM } from 'jsdom';
 import { createNotifications, notificationTopic, decodePublicKey } from '../forum/notifications.js';
 const topic = '11111111-1111-4111-8111-111111111111', notification = '22222222-2222-4222-8222-222222222222';
 const flush = async () => { for(let i=0;i<6;i++) await new Promise(resolve=>setImmediate(resolve)); };
-function fixture(t,{rpc:custom}={}) {
+function fixture(t,{rpc:custom,configureWindow}={}) {
  const dom=new JSDOM('<button id="notifications-button"></button>',{url:'https://example.invalid/foro/',pretendToBeVisual:true}),win=dom.window,doc=win.document;
  win.HTMLDialogElement.prototype.showModal=function(){this.open=true;};win.HTMLDialogElement.prototype.close=function(){this.open=false;};
+ if(configureWindow)configureWindow(win);
  let actor='a',epoch=0;const opened=[],calls=[];
  const rpc=async(name,args)=>{calls.push({name,args,actor});if(custom){const v=await custom(name,args);if(v!==undefined)return v;}
   if(name==='fc_notifications')return{items:[{id:notification,topic_id:topic,reply_id:'reply',created_at:'2026-10-26T09:00:00Z',read_at:null}],unread_count:1,has_more:false};
@@ -43,4 +44,15 @@ test('email preferences disclose pending delivery and never enable browser permi
 test('closing the inbox while a read is pending cancels its later navigation',async t=>{
  let resolve;const pending=new Promise(done=>resolve=done),h=fixture(t,{rpc:name=>name==='fc_read_notifications'?pending:undefined});
  await h.ui.open();h.button('Nueva respuesta · abrir').click();h.button('Cerrar avisos').click();resolve({updated:1});await flush();assert.deepEqual(h.opened,[]);
+});
+
+test('a pending browser permission is explained and closing the profile cancels its later subscription',async t=>{
+ let resolvePermission,registrations=0;const permission=new Promise(resolve=>resolvePermission=resolve);
+ const h=fixture(t,{rpc:name=>name==='fc_push_settings'?{configured:true,public_key:'B'+'a'.repeat(86)}:undefined,configureWindow:win=>{
+  win.PushManager=class{};win.MessageChannel=class{};win.Notification={permission:'default',requestPermission:()=>permission};
+  Object.defineProperty(win.navigator,'serviceWorker',{value:{getRegistration:async()=>undefined,register:async()=>{registrations++;},addEventListener(){},removeEventListener(){}}});
+ }});
+ const dialog=h.doc.createElement('dialog'),panel=h.ui.settingsPanel();dialog.append(panel);h.doc.body.append(dialog);dialog.showModal();await flush();
+ h.button('Activar avisos en este dispositivo').click();assert.match(panel.textContent,/Elige «Permitir»/);
+ dialog.close();resolvePermission('granted');await flush();assert.equal(registrations,0);assert.ok(!h.calls.some(call=>call.name==='fc_register_push'));
 });
